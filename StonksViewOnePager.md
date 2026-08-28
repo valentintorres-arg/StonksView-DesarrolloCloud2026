@@ -5,7 +5,7 @@
 Trabajo Práctico Integrador — Desarrollo de Software Cloud (2026)
 UTN Facultad Regional La Plata
 
-**Integrantes:** _[Nombre 1] · [Nombre 2] · [Nombre 3]_
+**Integrantes:** _Torres Valentin · Etchanchu Fermin · Flores Bautista_
 **Fecha:** 28/08/2026 — Entregable: One-Pager (Hito "Clase 1")
 
 ---
