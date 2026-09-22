@@ -1,0 +1,236 @@
+// StonksView / Mía — schema.prisma
+//
+// Refleja el esquema REAL de la base de datos ya existente (11 tablas),
+// tal como está en producción — no una versión recortada para el MVP.
+// Se agrega un único modelo nuevo, AiInsight, que es la única pieza que
+// StonksView suma sobre lo que ya existe en Mía.
+//
+// NO capturado acá — Prisma no lo representa, solo existe en Postgres:
+//   - Row Level Security (políticas por usuario/portfolio)
+//   - Los CHECK constraints (documentados como comentario en cada campo)
+//   - Triggers (ej. el que mantendría `holdings.updated_at` al día, si existe)
+//
+// Ninguna FK en el dump real tiene ON DELETE CASCADE — por eso las relaciones
+// de abajo no fuerzan onDelete: si en algún momento se agrega esa política en
+// la base, hay que reflejarla acá también.
+//
+// auth.users (gestionado por Supabase) se referencia como uuid plano en los
+// campos userId, no como relación de Prisma — su esquema es propiedad de
+// Supabase Auth.
+//
+// DATABASE_URL debe ser el connection string directo de Postgres (Project
+// Settings -> Database -> Connection string), no el par SUPABASE_URL /
+// SUPABASE_ANON_KEY que usa el cliente JS de Supabase.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Portfolio {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid // references auth.users(id)
+  name         String
+  baseCurrency String   @default("USD") @map("base_currency")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  holdings     Holding[]
+  transactions Transaction[]
+  transfers    Transfer[]
+  sales        Sale[]
+  snapshots    Snapshot[]
+  priceAlerts  PriceAlert[]
+  aiInsights   AiInsight[]
+
+  @@index([userId])
+  @@map("portfolios")
+}
+
+model Holding {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  portfolioId  String    @map("portfolio_id") @db.Uuid
+  symbol       String
+  assetClass   String    @map("asset_class") // check: in ('crypto','stock','etf','forex','other','cedear')
+  quantity     Decimal   @db.Decimal // check: quantity > 0
+  costBasis    Decimal?  @map("cost_basis") @db.Decimal // check: cost_basis >= 0
+  sourceType   String    @map("source_type") // check: in ('exchange','wallet','broker','other')
+  sourceName   String    @map("source_name")
+  acquiredAt   DateTime? @map("acquired_at") @db.Timestamptz(6)
+  notes        String?
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  fee          Decimal?  @db.Decimal // check: fee >= 0
+  lockupExpiry DateTime? @map("lockup_expiry") @db.Timestamptz(6)
+  updatedAt    DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  ratio        Decimal?  @db.Decimal // check: ratio > 0 (unidades de CEDEAR por 1 acción subyacente)
+
+  portfolio     Portfolio  @relation(fields: [portfolioId], references: [id])
+  transfersFrom Transfer[] @relation("TransferFromHolding")
+  transfersTo   Transfer[] @relation("TransferToHolding")
+
+  @@index([portfolioId])
+  @@index([symbol])
+  @@map("holdings")
+}
+
+model Transaction {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  portfolioId String   @map("portfolio_id") @db.Uuid
+  symbol      String
+  assetClass  String   @map("asset_class") // check: in ('crypto','stock','etf','forex','other','cedear')
+  type        String // check: in ('buy','sell','transfer_in','transfer_out')
+  quantity    Decimal  @db.Decimal // check: quantity > 0
+  price       Decimal? @db.Decimal // check: price >= 0
+  occurredAt  DateTime @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  notes       String?
+
+  portfolio Portfolio @relation(fields: [portfolioId], references: [id])
+
+  @@index([portfolioId])
+  @@map("transactions")
+}
+
+model PriceCache {
+  symbol           String
+  assetClass       String   @map("asset_class")
+  source           String
+  price            Decimal  @db.Decimal
+  currency         String   @default("USD")
+  changePercent24h Decimal? @map("change_percent_24h") @db.Decimal
+  fetchedAt        DateTime @default(now()) @map("fetched_at") @db.Timestamptz(6)
+
+  @@id([symbol, assetClass, source])
+  @@map("price_cache")
+}
+
+model PriceHistoryCache {
+  symbol     String
+  assetClass String   @map("asset_class")
+  days       Int
+  points     Json     @db.JsonB
+  fetchedAt  DateTime @default(now()) @map("fetched_at") @db.Timestamptz(6)
+
+  @@id([symbol, assetClass, days])
+  @@map("price_history_cache")
+}
+
+model Transfer {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  portfolioId    String   @map("portfolio_id") @db.Uuid
+  symbol         String
+  quantity       Decimal  @db.Decimal // check: quantity > 0
+  fromHoldingId  String?  @map("from_holding_id") @db.Uuid
+  toHoldingId    String?  @map("to_holding_id") @db.Uuid
+  fromSourceName String   @map("from_source_name")
+  toSourceName   String   @map("to_source_name")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  portfolio   Portfolio @relation(fields: [portfolioId], references: [id])
+  fromHolding Holding?  @relation("TransferFromHolding", fields: [fromHoldingId], references: [id])
+  toHolding   Holding?  @relation("TransferToHolding", fields: [toHoldingId], references: [id])
+
+  @@index([portfolioId])
+  @@map("transfers")
+}
+
+model Sale {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  portfolioId  String   @map("portfolio_id") @db.Uuid
+  symbol       String
+  quantity     Decimal  @db.Decimal // check: quantity > 0
+  salePrice    Decimal  @map("sale_price") @db.Decimal // check: sale_price >= 0
+  proceeds     Decimal  @db.Decimal
+  costBasis    Decimal  @map("cost_basis") @db.Decimal
+  realizedGain Decimal  @map("realized_gain") @db.Decimal
+  method       String // check: in ('fifo','lifo')
+  lotsConsumed Json     @map("lots_consumed") @db.JsonB
+  soldAt       DateTime @map("sold_at") @db.Timestamptz(6)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  portfolio Portfolio @relation(fields: [portfolioId], references: [id])
+
+  @@index([portfolioId])
+  @@map("sales")
+}
+
+model Snapshot {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  portfolioId    String   @map("portfolio_id") @db.Uuid
+  label          String?
+  totalValue     Decimal  @map("total_value") @db.Decimal
+  totalCostBasis Decimal  @map("total_cost_basis") @db.Decimal
+  byAssetClass   Json     @map("by_asset_class") @db.JsonB
+  holdings       Json     @db.JsonB
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  portfolio Portfolio @relation(fields: [portfolioId], references: [id])
+
+  @@index([portfolioId])
+  @@map("snapshots")
+}
+
+model PushSubscription {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid // references auth.users(id)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([userId])
+  @@map("push_subscriptions")
+}
+
+model PriceAlert {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String    @map("user_id") @db.Uuid // references auth.users(id)
+  portfolioId   String    @map("portfolio_id") @db.Uuid
+  symbol        String
+  assetClass    String    @map("asset_class") // check: in ('crypto','stock','etf','forex','other','cedear')
+  sourceName    String?   @map("source_name")
+  condition     String // check: in ('above','below')
+  targetPrice   Decimal   @map("target_price") @db.Decimal // check: target_price > 0
+  active        Boolean   @default(true)
+  triggeredAt   DateTime? @map("triggered_at") @db.Timestamptz(6)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  kind          String    @default("price") // check: in ('price','percent')
+  percentChange Decimal?  @map("percent_change") @db.Decimal
+  basePrice     Decimal?  @map("base_price") @db.Decimal
+
+  portfolio Portfolio @relation(fields: [portfolioId], references: [id])
+
+  @@index([userId])
+  @@index([active])
+  @@map("price_alerts")
+}
+
+model NewsWatch {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId             String   @map("user_id") @db.Uuid // references auth.users(id)
+  symbol             String
+  lastNotifiedItemId String?  @map("last_notified_item_id")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([userId])
+  @@map("news_watches")
+}
+
+// ============ NUEVO PARA STONKSVIEW (no existe aún en la base) ============
+// Insight de IA sobre un portfolio: contexto ya calculado (determinístico) +
+// el texto que devolvió el LLM. Nunca guarda un número nuevo, solo texto.
+model AiInsight {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  portfolioId     String   @map("portfolio_id") @db.Uuid
+  contextoEnviado Json     @map("contexto_enviado") @db.JsonB
+  respuestaTexto  String?  @map("respuesta_texto")
+  estado          String   @default("ok") // check: in ('ok', 'no_disponible')
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  portfolio Portfolio @relation(fields: [portfolioId], references: [id])
+
+  @@index([portfolioId])
+  @@map("ai_insights")
+}
