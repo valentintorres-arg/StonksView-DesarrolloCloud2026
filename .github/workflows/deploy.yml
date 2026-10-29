@@ -1,0 +1,67 @@
+name: Deploy
+
+# CD hacia AWS (Plan A). Queda deshabilitado hasta que existan los recursos:
+# definir la variable de repositorio AWS_DEPLOY_ENABLED=true cuando estén listos
+# (cuenta AWS, rol OIDC, bucket de S3, distribución de CloudFront y template SAM).
+# Si se pasa al Plan B (Vercel), este workflow se reemplaza por la integración Git de Vercel.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  id-token: write # OIDC hacia AWS, sin access keys guardadas
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to AWS
+    if: ${{ vars.AWS_DEPLOY_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      # Backend: Lambdas + API Gateway + EventBridge (tarea 1.6)
+      - uses: aws-actions/setup-sam@v2
+      - name: Build and deploy backend
+        run: |
+          sam build
+          sam deploy --no-confirm-changeset --no-fail-on-empty-changeset
+
+      # Frontend: export estático a S3 + invalidación de CloudFront (tarea 3.5)
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+        env:
+          NEXT_PUBLIC_API_URL: ${{ vars.API_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+      - name: Publish to S3 and invalidate CloudFront
+        run: |
+          aws s3 sync frontend/out "s3://${{ vars.S3_BUCKET }}" --delete
+          aws cloudfront create-invalidation --distribution-id "${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}" --paths "/*"
+
+      # Verificación post-deploy (tarea 1.9)
+      - name: Health check
+        run: curl --fail --retry 5 --retry-delay 5 "${{ vars.API_URL }}/health"
