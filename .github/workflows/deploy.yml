@@ -2,7 +2,14 @@ name: Deploy
 
 # CD hacia AWS (Plan A). Queda deshabilitado hasta que existan los recursos:
 # definir la variable de repositorio AWS_DEPLOY_ENABLED=true cuando estén listos
-# (cuenta AWS, rol OIDC, bucket de S3, distribución de CloudFront y template SAM).
+# (bucket de S3, distribución de CloudFront y template SAM).
+#
+# Credenciales: el usuario IAM github-actions-deploy (policy StonksViewGitHubDeploy,
+# acotada a recursos stonksview-* en us-east-2). Sus access keys van como secrets
+# AWS_ACCESS_KEY_ID y AWS_SECRET_ACCESS_KEY del environment production.
+# No se usa OIDC porque la SCP del plan free de AWS bloquea crear el identity provider.
+# El nombre del stack de SAM tiene que empezar con "stonksview" para que la policy aplique.
+#
 # Si se pasa al Plan B (Vercel), este workflow se reemplaza por la integración Git de Vercel.
 
 on:
@@ -15,7 +22,6 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  id-token: write # OIDC hacia AWS, sin access keys guardadas
   contents: read
 
 jobs:
@@ -29,7 +35,8 @@ jobs:
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ vars.AWS_REGION }}
 
       # Backend: Lambdas + API Gateway + EventBridge (tarea 1.6)
