@@ -37,6 +37,31 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm build
 
+  backend:
+    name: Backend (typecheck, test, SAM validate y build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - run: npm ci
+        working-directory: backend
+      - run: npm run typecheck
+        working-directory: backend
+      - run: npm test
+        working-directory: backend
+
+      - uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
+      - run: sam validate --lint
+      - run: sam build
+
   prisma:
     name: Prisma (validate schema)
     runs-on: ubuntu-latest
