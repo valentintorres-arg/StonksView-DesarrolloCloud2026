@@ -44,7 +44,10 @@ jobs:
       - name: Build and deploy backend
         run: |
           sam build
-          sam deploy --no-confirm-changeset --no-fail-on-empty-changeset
+          sam deploy --no-confirm-changeset --no-fail-on-empty-changeset \
+            --parameter-overrides \
+              "SupabaseUrl=${{ vars.SUPABASE_URL }}" \
+              "SupabaseAnonKey=${{ vars.SUPABASE_ANON_KEY }}"
 
       # Frontend: export estático a S3 + invalidación de CloudFront (tarea 3.5)
       - uses: pnpm/action-setup@v4
