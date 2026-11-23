@@ -65,6 +65,14 @@ Este archivo documenta el razonamiento técnico detrás de cada fragmento de có
 
 ---
 
+## 23/11/2026 — Especificación funcional de la app
+- **Problema abordado:** Las issues describen tareas de implementación de dos o tres líneas, pero ningún documento definía qué hace la app pantalla por pantalla ni sus reglas de negocio (moneda, precios faltantes, edición de lotes, FIFO/LIFO por sede, límites del insight, alertas). Esas decisiones quedaban a criterio de quien implementara cada issue.
+- **Prompt / Herramienta utilizada:** Claude Code, pidiéndole revisar las issues y la documentación existente y armar una spec funcional a partir del readme, `StonksView_Arquitectura.md`, el `schema.prisma` y `transfer_holding.sql`.
+- **Código / Arquitectura generada:** `docs/spec-funcional.md` con alcance del MVP, glosario, 44 reglas de negocio numeradas (`RN-xx`), 10 pantallas (`P1`–`P10`) con campos, validaciones y estados vacío/carga/error, 5 flujos de usuario, la relación con cada issue y 19 preguntas abiertas con una propuesta para cada una. Distingue lo que ya estaba definido de lo que es propuesta.
+- **Validación y Corrección Humana:** Las reglas que ya existían se contrastaron con el schema y la función SQL: costo base por unidad, lotes que nunca se promedian, sedes sin distinguir mayúsculas y transferencia total que conserva el lote. La revisión encontró huecos que la spec deja marcados: el CHECK de `source_type` no admite bancos aunque el readme los menciona, `transfer_holding` no bloquea lotes en lockup, y no hay issue para la UI de venta ni para el historial de movimientos. Las preguntas abiertas quedan para que las decida el equipo antes de las fases 3 y 4.
+
+---
+
 ## 23/11/2026 — Proyecto Supabase, migración inicial y cliente del frontend (issues #12 y #13)
 - **Problema abordado:** Crear el proyecto de Supabase del equipo, conectarlo al repo y aplicar el schema de `schema.prisma` con lo que Prisma no representa (CHECK, RLS, grants, triggers).
 - **Prompt / Herramienta utilizada:** Claude Code con el MCP de Supabase (autorizado por un integrante sobre su organización), a partir de `schema.prisma` y `StonksView_Arquitectura.md`.
