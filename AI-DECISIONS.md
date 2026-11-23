@@ -33,6 +33,14 @@ Este archivo documenta el razonamiento técnico detrás de cada fragmento de có
 
 ---
 
+## 16/11/2026 — Credenciales de deploy a AWS sin OIDC (tarea 0.3)
+- **Problema abordado:** Configurar la cuenta de AWS para que GitHub Actions pueda desplegar (tarea 0.3). El plan original usaba un rol IAM con OIDC para evitar access keys, pero al intentarlo se encontró que la cuenta está en el plan free de AWS, cuya SCP de organización (administrada por AWS) niega explícitamente todas las acciones `iam:*OpenIDConnectProvider*`. Editar esa SCP requiere pasar la cuenta a plan pago.
+- **Prompt / Herramienta utilizada:** Claude Code, con acceso de lectura a la cuenta por AWS CLI. Se le pidió revisar el estado de la tarea 0.3, diagnosticar el bloqueo y proponer alternativas.
+- **Código / Arquitectura generada:** La IA diagnosticó el origen del bloqueo (SCP de la organización del plan free, roles `/managed/` de AWS) y comparó cuatro caminos: hacer el upgrade para editar la SCP, usar un usuario IAM con access keys, hacer el deploy manual o pasar al Plan B (Vercel). Con el camino elegido creó un budget mensual de USD 10 (avisos al 50/80/100% real y 100% pronosticado, midiendo gasto bruto sin créditos), el usuario `github-actions-deploy` con una policy de mínimo privilegio (`StonksViewGitHubDeploy`, acotada a recursos `stonksview-*` en us-east-2) y adaptó `deploy.yml` para usar las access keys desde los secrets del environment `production`.
+- **Validación y Corrección Humana:** Se descartó, por ahora, el upgrade a plan pago (implica que el gasto por encima de los créditos se cobre a la tarjeta). Antes de elegir el camino de access keys se pidió verificarlo con una prueba reversible: crear y borrar un usuario y una access key de prueba. La policy se validó con IAM Access Analyzer (la primera versión tenía ARNs mal formados por la expansión de variables del shell y se corrigió). Para cerrar la escalada de privilegios se limitó `iam:PassRole` a Lambda y `iam:AttachRolePolicy` a `AWSLambdaBasicExecutionRole`. Queda como riesgo aceptado `iam:PutRolePolicy` sobre roles `stonksview-*`. Las access keys las genera y carga un integrante del equipo directamente en GitHub, sin pasar por la IA. También se evaluó volver al Plan B (Vercel + Supabase); se decidió seguir con AWS.
+
+---
+
 ## 23/11/2026 — Función Postgres `transfer_holding` (issue #14)
 - **Problema abordado:** Transferir una tenencia entre dos sedes propias (ej. de Binance a una wallet Ledger) de forma atómica, sin generar una venta y sin alterar el costo base. Cada fila de `holdings` es un lote con costo **por unidad** y fecha de adquisición propios (se puede haber comprado BTC a varios precios distintos).
 - **Prompt / Herramienta utilizada:** Claude Code (Opus) a partir del issue #14, el `schema.prisma` y `StonksView_Arquitectura.md`.
