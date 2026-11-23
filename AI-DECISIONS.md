@@ -25,6 +25,14 @@ Este archivo documenta el razonamiento técnico detrás de cada fragmento de có
 
 ---
 
+## 16/11/2026 — Archivos `.env.example` del frontend y del backend
+- **Problema abordado:** Documentar todas las variables de entorno del proyecto (Supabase, Prisma, Groq, VAPID y AWS) sin exponer valores reales, y evitar que algún secreto termine en el bundle del navegador.
+- **Prompt / Herramienta utilizada:** Claude Code, pidiéndole implementar la issue #11 tal como estaba definida en el plan del equipo (`plan a seguir.md`).
+- **Código / Arquitectura generada:** Dos archivos separados. `frontend/.env.example` contiene solo las variables públicas con prefijo `NEXT_PUBLIC_` (`API_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`), con los mismos nombres que usa `deploy.yml`. `.env.example` en la raíz contiene las del backend y Prisma: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, `GROQ_API_KEY`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` y `AWS_REGION`. Cada variable lleva un comentario con de dónde se obtiene y si es pública o secreta.
+- **Validación y Corrección Humana:** El plan afirmaba que el `.gitignore` ignoraba `.env*` sin afectar a los `.example`. Eso es cierto para el `.gitignore` de la raíz, pero no para `frontend/.gitignore`, que sí ignora `.env*` completo: el `frontend/.env.example` nunca se habría subido. Se agregó la excepción `!.env.example` y se comprobó con `git check-ignore` que los `.example` quedan versionados y que `.env` y `.env.local` siguen ignorados. Se revisó que ningún archivo tuviera valores reales (solo placeholders), que la `service_role` y el `DATABASE_URL` quedaran marcados como secretos por saltear RLS, y que el `DATABASE_URL` de ejemplo pasara `prisma validate`.
+
+---
+
 ## 16/11/2026 — Credenciales de deploy a AWS sin OIDC (tarea 0.3)
 - **Problema abordado:** Configurar la cuenta de AWS para que GitHub Actions pueda desplegar (tarea 0.3). El plan original usaba un rol IAM con OIDC para evitar access keys, pero al intentarlo se encontró que la cuenta está en el plan free de AWS, cuya SCP de organización (administrada por AWS) niega explícitamente todas las acciones `iam:*OpenIDConnectProvider*`. Editar esa SCP requiere pasar la cuenta a plan pago.
 - **Prompt / Herramienta utilizada:** Claude Code, con acceso de lectura a la cuenta por AWS CLI. Se le pidió revisar el estado de la tarea 0.3, diagnosticar el bloqueo y proponer alternativas.
