@@ -1,0 +1,76 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: StonksView - API serverless (API Gateway HTTP API + Lambda)
+
+# El nombre del stack tiene que empezar con "stonksview" (ver samconfig.toml):
+# la policy del usuario de deploy solo permite recursos stonksview-*.
+
+Parameters:
+  AllowedOrigins:
+    Type: CommaDelimitedList
+    Default: http://localhost:3000
+    Description: Orígenes permitidos por CORS (localhost y, cuando exista, la URL de CloudFront).
+
+Globals:
+  Function:
+    Runtime: nodejs22.x
+    Architectures:
+      - arm64
+    MemorySize: 256
+    Timeout: 10
+    CodeUri: backend/
+    Environment:
+      Variables:
+        NODE_OPTIONS: --enable-source-maps
+
+Resources:
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration:
+        AllowOrigins: !Ref AllowedOrigins
+        AllowMethods:
+          - GET
+          - POST
+          - PATCH
+          - DELETE
+          - OPTIONS
+        AllowHeaders:
+          - authorization
+          - content-type
+        MaxAge: 600
+
+  PingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: ping.handler
+      Events:
+        Ping:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /ping
+            Method: GET
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - src/handlers/ping.ts
+        Format: esm
+        OutExtension:
+          - .js=.mjs
+        Target: es2022
+        Minify: true
+        Sourcemap: true
+        UseNpmCi: true
+
+  PingFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${PingFunction}
+      RetentionInDays: 14
+
+Outputs:
+  ApiUrl:
+    Description: URL base de la API
+    Value: !Sub https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com
