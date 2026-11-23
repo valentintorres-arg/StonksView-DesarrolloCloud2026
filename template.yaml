@@ -10,6 +10,13 @@ Parameters:
     Type: CommaDelimitedList
     Default: http://localhost:3000
     Description: Orígenes permitidos por CORS (localhost y, cuando exista, la URL de CloudFront).
+  SupabaseUrl:
+    Type: String
+    Description: URL del proyecto de Supabase (SUPABASE_URL).
+  SupabaseAnonKey:
+    Type: String
+    NoEcho: true
+    Description: Clave anon de Supabase (SUPABASE_ANON_KEY). Pública, pero no se muestra en la consola.
 
 Globals:
   Function:
@@ -22,6 +29,8 @@ Globals:
     Environment:
       Variables:
         NODE_OPTIONS: --enable-source-maps
+        SUPABASE_URL: !Ref SupabaseUrl
+        SUPABASE_ANON_KEY: !Ref SupabaseAnonKey
 
 Resources:
   HttpApi:
@@ -68,6 +77,36 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub /aws/lambda/${PingFunction}
+      RetentionInDays: 14
+
+  HealthFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: health.handler
+      Events:
+        Health:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /health
+            Method: GET
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - src/handlers/health.ts
+        Format: esm
+        OutExtension:
+          - .js=.mjs
+        Target: es2022
+        Minify: true
+        Sourcemap: true
+        UseNpmCi: true
+
+  HealthFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${HealthFunction}
       RetentionInDays: 14
 
 Outputs:
