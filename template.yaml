@@ -169,6 +169,68 @@ Resources:
       LogGroupName: !Sub /aws/lambda/${SalesFunction}
       RetentionInDays: 14
 
+  # CRUD de portfolios y holdings: una sola función para las seis rutas
+  # (elige el caso de uso por routeKey).
+  PortfoliosFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: portfolios.handler
+      Events:
+        ListPortfolios:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /portfolios
+            Method: GET
+        CreatePortfolio:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /portfolios
+            Method: POST
+        ListHoldings:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /portfolios/{portfolioId}/holdings
+            Method: GET
+        CreateHolding:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /portfolios/{portfolioId}/holdings
+            Method: POST
+        UpdateHolding:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /holdings/{holdingId}
+            Method: PATCH
+        DeleteHolding:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /holdings/{holdingId}
+            Method: DELETE
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - src/handlers/portfolios.ts
+        Format: esm
+        OutExtension:
+          - .js=.mjs
+        Target: es2022
+        Minify: true
+        Sourcemap: true
+        UseNpmCi: true
+
+  PortfoliosFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${PortfoliosFunction}
+      RetentionInDays: 14
+
 Outputs:
   ApiUrl:
     Description: URL base de la API
