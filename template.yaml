@@ -109,6 +109,36 @@ Resources:
       LogGroupName: !Sub /aws/lambda/${HealthFunction}
       RetentionInDays: 14
 
+  TransfersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: transfers.handler
+      Events:
+        CreateTransfer:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /transfers
+            Method: POST
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - src/handlers/transfers.ts
+        Format: esm
+        OutExtension:
+          - .js=.mjs
+        Target: es2022
+        Minify: true
+        Sourcemap: true
+        UseNpmCi: true
+
+  TransfersFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${TransfersFunction}
+      RetentionInDays: 14
+
 Outputs:
   ApiUrl:
     Description: URL base de la API
