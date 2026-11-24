@@ -19,10 +19,11 @@ export type ErrorCode =
   | "unauthorized"
   | "forbidden"
   | "not_found"
+  | "conflict"
   | "unprocessable"
   | "internal_error";
 
-export type ErrorStatus = 400 | 401 | 403 | 404 | 422 | 500;
+export type ErrorStatus = 400 | 401 | 403 | 404 | 409 | 422 | 500;
 
 export interface ErrorBody {
   error: ErrorCode;
@@ -30,7 +31,9 @@ export interface ErrorBody {
   issues?: string[];
 }
 
-export type Outcome<T> = { status: 201; body: T } | { status: ErrorStatus; body: ErrorBody };
+export type SuccessStatus = 200 | 201 | 204;
+
+export type Outcome<T> = { status: SuccessStatus; body: T } | { status: ErrorStatus; body: ErrorBody };
 
 // Número decimal (string o number) que se devuelve como string exacto, para
 // que un `numeric` de Postgres no pierda precisión en el camino.
@@ -74,11 +77,17 @@ export function invalidRequest(message: string, error: z.ZodError): Outcome<neve
 export interface RpcErrorMessages {
   notFound: string;
   internal: string;
+  // Mensaje para una violación de FK al borrar (23503): la fila está
+  // referenciada por otra. Sin él, 23503 se trata como error interno.
+  conflict?: string;
+  // RLS rechazó la escritura (42501): para no revelar que el recurso de otro
+  // usuario existe, se puede responder como si no existiera.
+  forbiddenAsNotFound?: boolean;
 }
 
-// Traduce los errores de las funciones Postgres a HTTP. Los mensajes de
-// negocio (22023/22004) los escribe la función para el usuario y se pasan
-// tal cual; los demás no se exponen y van al log.
+// Traduce los errores de Postgres/PostgREST a HTTP. Los mensajes de negocio
+// (22023/22004) los escribe la función para el usuario y se pasan tal cual;
+// cualquier otro error no se expone y va al log.
 export function mapRpcError(
   error: RpcError,
   messages: RpcErrorMessages,
@@ -95,12 +104,17 @@ export function mapRpcError(
       return { status: 422, body: { error: "unprocessable", message: error.message } };
     case "22004":
       return { status: 400, body: { error: "invalid_request", message: error.message } };
+    case "23503":
+      if (!messages.conflict) break;
+      return { status: 409, body: { error: "conflict", message: messages.conflict } };
     case "42501":
+      if (messages.forbiddenAsNotFound) {
+        return { status: 404, body: { error: "not_found", message: messages.notFound } };
+      }
       return { status: 403, body: { error: "forbidden", message: "No tenés permiso para esta operación" } };
-    default:
-      onError(error);
-      return internalError(messages.internal);
   }
+  onError(error);
+  return internalError(messages.internal);
 }
 
 export function internalError(message: string): Outcome<never> {
