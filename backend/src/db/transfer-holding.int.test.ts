@@ -42,25 +42,57 @@ describe("transfer_holding", () => {
     const r = await transfer(USER_1, lot, "0.5", "Ledger", "wallet");
 
     expect(r).toMatchObject({ merged: false, relocated: false });
-    expect(await readLot(t.db, lot)).toMatchObject({ quantity: "1.5", cost_basis: "30000", fee: "10" });
-    expect(await readLot(t.db, r.to_holding_id)).toMatchObject({
+    // La comisión (10) se reparte según la cantidad: 1.5/2 queda, 0.5/2 viaja.
+    const source = await readLot(t.db, lot);
+    const target = await readLot(t.db, r.to_holding_id);
+    expect(source).toMatchObject({ quantity: "1.5", cost_basis: "30000" });
+    expect(Number(source!.fee)).toBe(7.5);
+    expect(target).toMatchObject({
       quantity: "0.5",
       cost_basis: "30000",
-      fee: null,
       source_name: "Ledger",
       source_type: "wallet",
       acquired_at: "2026-03-15",
     });
+    expect(Number(target!.fee)).toBe(2.5);
   });
 
-  it("una segunda transferencia del mismo lote se suma al lote destino", async () => {
-    const lot = await insertLot(t.db, portfolio, { quantity: "2", costBasis: "100", acquiredAt: "2026-01-01" });
+  it("un lote sin comisión transfiere sin comisión", async () => {
+    const lot = await insertLot(t.db, portfolio, { quantity: "2", costBasis: "100" });
+
+    const r = await transfer(USER_1, lot, "0.5", "Ledger", "wallet");
+
+    expect((await readLot(t.db, lot))!.fee).toBeNull();
+    expect((await readLot(t.db, r.to_holding_id))!.fee).toBeNull();
+  });
+
+  it("una segunda transferencia del mismo lote se suma al lote destino, con su comisión", async () => {
+    const lot = await insertLot(t.db, portfolio, { quantity: "2", costBasis: "100", fee: "4", acquiredAt: "2026-01-01" });
 
     const first = await transfer(USER_1, lot, "0.5", "Ledger", "wallet");
     const second = await transfer(USER_1, lot, "0.5", " ledger ", "wallet");
 
     expect(second).toMatchObject({ merged: true, to_holding_id: first.to_holding_id });
-    expect(await readLot(t.db, first.to_holding_id)).toMatchObject({ quantity: "1.0", source_name: "Ledger" });
+    const merged = await readLot(t.db, first.to_holding_id);
+    expect(merged).toMatchObject({ quantity: "1.0", source_name: "Ledger" });
+    // 1 de la primera (4 × 0.5/2) + 1 de la segunda (3 × 0.5/1.5)
+    expect(Number(merged!.fee)).toBeCloseTo(2, 12);
+    expect(Number((await readLot(t.db, lot))!.fee)).toBeCloseTo(2, 12);
+  });
+
+  it("vender lo transferido imputa la comisión que viajó con el lote", async () => {
+    const lot = await insertLot(t.db, portfolio, { quantity: "1", costBasis: "30000", fee: "10" });
+    const r = await transfer(USER_1, lot, "0.25", "Ledger", "wallet");
+
+    const sale = await t.as(USER_1, async (db) =>
+      (await db.query<{ r: { cost_basis: string } }>(
+        "select public.sell_holding($1, 'BTC', 'crypto', 0.25, 70000, 'fifo', now(), 'Ledger') as r",
+        [portfolio],
+      )).rows[0]!.r,
+    );
+
+    expect(Number(sale.cost_basis)).toBe(0.25 * 30000 + 2.5);
+    expect((await readLot(t.db, r.to_holding_id))!.quantity).toBe("0.00");
   });
 
   it("no mezcla lotes con distinto costo por unidad", async () => {
