@@ -24,3 +24,6 @@ supabase/.branches
 supabase/.temp
 # Build de SAM
 .aws-sam/
+
+# Servidor local de la API (npm run dev en backend/)
+backend/.dev/
