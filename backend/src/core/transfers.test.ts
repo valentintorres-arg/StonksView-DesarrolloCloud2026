@@ -91,14 +91,14 @@ describe("createTransfer", () => {
     const outcome = await createTransfer(valid, rpcError("P0002", `Holding ${HOLDING} no encontrado`));
     expect(outcome).toEqual({
       status: 404,
-      body: { error: "holding_not_found", message: "El holding no existe" },
+      body: { error: "not_found", message: "El holding no existe" },
     });
   });
 
   it("devuelve 422 con el mensaje de la función cuando la transferencia no es válida", async () => {
     const message = "Cantidad insuficiente: se pidieron 2, el lote tiene 1";
     const outcome = await createTransfer(valid, rpcError("22023", message));
-    expect(outcome).toEqual({ status: 422, body: { error: "invalid_transfer", message } });
+    expect(outcome).toEqual({ status: 422, body: { error: "unprocessable", message } });
   });
 
   it("devuelve 401 si el JWT no es válido", async () => {

@@ -139,6 +139,36 @@ Resources:
       LogGroupName: !Sub /aws/lambda/${TransfersFunction}
       RetentionInDays: 14
 
+  SalesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: sales.handler
+      Events:
+        CreateSale:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /sales
+            Method: POST
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - src/handlers/sales.ts
+        Format: esm
+        OutExtension:
+          - .js=.mjs
+        Target: es2022
+        Minify: true
+        Sourcemap: true
+        UseNpmCi: true
+
+  SalesFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${SalesFunction}
+      RetentionInDays: 14
+
 Outputs:
   ApiUrl:
     Description: URL base de la API
