@@ -173,6 +173,19 @@ describe("computePortfolioMetrics", () => {
     ).toThrow(RangeError);
   });
 
+  it("ignora los lotes agotados por una venta (quantity 0)", () => {
+    const metrics = computePortfolioMetrics(
+      [lot({ quantity: "0", symbol: "SIN-PRECIO" }), lot({ quantity: "0", costBasis: "999" }), lot({ quantity: "1" })],
+      prices({ "crypto:BTC": "10" }),
+    );
+
+    expect(metrics.totalValue).toBe("10");
+    expect(metrics.valuedLots).toBe(1);
+    expect(metrics.unpricedHoldings).toEqual([]);
+    expect(metrics.unrealizedGain.lotsWithoutCostBasis).toBe(1);
+    expect(metrics.unrealizedGain.costBasis).toBe("0");
+  });
+
   it("acepta cantidades chicas y precios como number sin perder exactitud", () => {
     const metrics = computePortfolioMetrics(
       [lot({ quantity: 0.00000001 }), lot({ quantity: 0.1 }), lot({ quantity: 0.2 })],
