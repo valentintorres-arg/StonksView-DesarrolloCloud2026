@@ -23,6 +23,7 @@ import {
   dec,
   type Decimal,
   type DecimalInput,
+  isZero,
   mul,
   percent,
   sub,
@@ -129,13 +130,17 @@ export function computePortfolioMetrics(
   const symbols = new Map<string, Group & { symbol: string; assetClass: string }>();
 
   for (const lot of holdings) {
+    // Lote agotado por una venta (quantity 0): queda en la base por historial,
+    // pero ya no es una tenencia.
+    const quantity = dec(lot.quantity);
+    if (isZero(quantity)) continue;
+
     const price = priceOf(lot.symbol, lot.assetClass);
     if (price === undefined) {
       unpricedHoldings.push({ id: lot.id, symbol: lot.symbol, assetClass: lot.assetClass });
       continue;
     }
 
-    const quantity = dec(lot.quantity);
     const value = mul(quantity, price);
     total = add(total, value);
     valuedLots += 1;

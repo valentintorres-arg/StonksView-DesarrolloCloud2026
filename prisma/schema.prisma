@@ -55,7 +55,7 @@ model Holding {
   portfolioId  String    @map("portfolio_id") @db.Uuid
   symbol       String
   assetClass   String    @map("asset_class") // check: in ('crypto','stock','etf','forex','other','cedear')
-  quantity     Decimal   @db.Decimal // check: quantity > 0
+  quantity     Decimal   @db.Decimal // check: quantity >= 0 (0 = lote agotado por una venta, se conserva por historial; migración 03sellholding)
   costBasis    Decimal?  @map("cost_basis") @db.Decimal // check: cost_basis >= 0
   sourceType   String    @map("source_type") // check: in ('exchange','wallet','broker','other')
   sourceName   String    @map("source_name")
