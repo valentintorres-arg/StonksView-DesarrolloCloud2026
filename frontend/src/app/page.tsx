@@ -1,10 +1,10 @@
 "use client";
 
 import { RequireAuth } from "@/components/auth-guards";
+import { Dashboard } from "@/components/dashboard";
 import { useAuth } from "@/lib/auth";
 
-// Inicio privado. El dashboard consolidado (3.3) se monta acá cuando esté la
-// pantalla; por ahora muestra la sesión y permite salir.
+// Inicio privado: el dashboard consolidado (3.3).
 export default function Home() {
   return (
     <RequireAuth>
@@ -32,9 +32,8 @@ function HomeContent() {
           </button>
         </div>
       </header>
-      <main className="flex flex-1 flex-col items-center justify-center p-8 text-center">
-        <h1 className="text-2xl font-bold">Tu patrimonio consolidado</h1>
-        <p className="mt-2 text-neutral-500">El dashboard llega en la próxima entrega.</p>
+      <main className="flex-1">
+        <Dashboard />
       </main>
     </div>
   );
