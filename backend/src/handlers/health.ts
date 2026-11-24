@@ -23,16 +23,14 @@ function getClient(): SupabaseClient {
   return client;
 }
 
-// Consulta mínima (HEAD, sin filas) sobre price_cache: obliga a PostgREST a
-// ir a Postgres sin traer datos. Con la clave anon y RLS el resultado puede
-// venir vacío; lo único que importa es que no haya error.
-const supabaseProbe: DatabaseProbe = async (signal) => {
-  const { error } = await getClient()
-    .from("price_cache")
-    .select("symbol", { head: true })
-    .limit(1)
-    .abortSignal(signal);
+// Llama a public.health_check() (migración 06healthcheck): obliga a PostgREST
+// a ir a Postgres sin leer ninguna tabla. Se corre con la clave anon, que no
+// tiene acceso a las tablas; por eso no se consulta price_cache como antes
+// (respondía 401 y el chequeo daba siempre 503).
+export const supabaseProbe: DatabaseProbe = async (signal) => {
+  const { data, error } = await getClient().rpc("health_check").abortSignal(signal);
   if (error) throw error;
+  if (data !== true) throw new Error(`health_check devolvió ${JSON.stringify(data)}`);
 };
 
 export function createHandler(probe: DatabaseProbe): APIGatewayProxyHandlerV2 {
