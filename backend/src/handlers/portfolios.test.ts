@@ -22,7 +22,7 @@ function fakeStore(): PortfolioStore {
 }
 
 async function invoke(store: PortfolioStore, event: Partial<APIGatewayProxyEventV2>, token = "jwt") {
-  const storeFor = vi.fn(() => store);
+  const storeFor = vi.fn(() => ({ portfolios: store, prices: { pricesFor: vi.fn(async () => ({ data: [], error: null })) } }));
   const result = (await createHandler(storeFor)(
     {
       headers: token ? { authorization: `Bearer ${token}` } : {},

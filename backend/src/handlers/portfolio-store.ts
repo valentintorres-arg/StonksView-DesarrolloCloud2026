@@ -3,6 +3,7 @@
 // que no pasen por un number de JavaScript y pierdan decimales.
 
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
+import type { PriceRow, PriceStore } from "../core/dashboard";
 import type { HoldingRow, PortfolioRow, PortfolioStore, StoreResult } from "../core/portfolios";
 
 const PORTFOLIO_COLUMNS = "id, name, base_currency, created_at";
@@ -69,6 +70,19 @@ export function supabasePortfolioStore(client: SupabaseClient): PortfolioStore {
       const response = await client.from("holdings").delete().eq("id", id).select("id");
       const rows = result<{ id: string }[]>(response as Response<{ id: string }[]>, []);
       return rows.error ? rows : { data: rows.data.length > 0, error: null };
+    },
+  };
+}
+
+// price_cache es de lectura para cualquier usuario logueado (RLS).
+export function supabasePriceStore(client: SupabaseClient): PriceStore {
+  return {
+    async pricesFor(symbols) {
+      const response = await client
+        .from("price_cache")
+        .select("symbol, asset_class, source, price::text, currency, fetched_at")
+        .in("symbol", symbols);
+      return result<PriceRow[]>(response as Response<PriceRow[]>, []);
     },
   };
 }
