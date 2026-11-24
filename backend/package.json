@@ -8,7 +8,8 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "dev": "esbuild src/dev/server.ts --bundle --platform=node --format=esm --target=es2022 --packages=external --outfile=.dev/server.mjs --log-level=warning && node --env-file-if-exists=../.env .dev/server.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.119.2",

@@ -161,6 +161,14 @@ Este archivo documenta el razonamiento técnico detrás de cada fragmento de có
 
 ---
 
+## 24/11/2026 — Pantalla del dashboard consolidado y API local (tarea 3.3, issue #28)
+- **Problema abordado:** Mostrar el patrimonio total y la composición por sede y por clase de activo. Para probarlo hacía falta la API, pero no está desplegada (el deploy está deshabilitado) y SAM no está instalado en las máquinas del equipo.
+- **Prompt / Herramienta utilizada:** Claude Code, pidiéndole seguir con la siguiente tarea asignada una vez mergeados el login y el endpoint de métricas.
+- **Código / Arquitectura generada:** Servidor local de desarrollo (`npm run dev` en `backend/`, puerto 3001): sirve los mismos handlers con las mismas rutas que `template.yaml`, arma el evento de API Gateway (con `routeKey` y `pathParameters`) y responde CORS para `localhost:3000`. Un test verifica que sus rutas coincidan con las del template. En el frontend, `lib/api.ts` manda el JWT de la sesión en cada request, y `components/dashboard.tsx` muestra patrimonio y ganancia no realizada en tarjetas, barras de participación por sede y por clase, y avisos de tenencias sin precio, lotes sin costo base y concentración de riesgo. Si no hay portfolios, ofrece crear el primero. `NEXT_PUBLIC_API_URL` pasó del puerto 3000 (que chocaba con `next dev`) al 3001.
+- **Validación y Corrección Humana:** Siguiendo la guía de visualización se eligieron tarjetas para las cifras principales y barras de una sola serie con el nombre y el valor al lado (sin leyenda ni colores por categoría); el signo de la ganancia va con +/− y flecha, no solo con color. La regla de React `set-state-in-effect` rechazó la primera versión de la carga de datos y se reescribió con un hook que solo actualiza el estado al llegar la respuesta. Se probó en el navegador con el usuario de prueba y con precios cargados a mano: el total, el valor por sede, la ganancia y la alerta de concentración coincidieron con el cálculo manual; también se probaron el login y el logout reales. Al levantar la API local apareció un error previo: `GET /health` consulta `price_cache` con la clave anon, y la migración `01init` le quitó todo acceso a `anon`, así que el chequeo siempre responde 503. Queda para un PR aparte.
+
+---
+
 ## 24/11/2026 — `GET /health` respondía siempre 503 (fix)
 - **Problema abordado:** Al levantar la API local se vio que `/health` daba 503 aunque la base estaba arriba. El chequeo consultaba `price_cache` con la clave anon, y la migración `01init` le quitó a `anon` el acceso a todas las tablas (PostgREST respondía 401). En AWS hubiera roto la verificación de `/health` después de cada deploy (tarea 2.3).
 - **Prompt / Herramienta utilizada:** Claude Code con el MCP de Supabase; lo detectó probando el dashboard y se le pidió arreglarlo.
