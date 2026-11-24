@@ -169,7 +169,7 @@ Resources:
       LogGroupName: !Sub /aws/lambda/${SalesFunction}
       RetentionInDays: 14
 
-  # CRUD de portfolios y holdings: una sola función para las seis rutas
+  # CRUD de portfolios y holdings: una sola función para todas las rutas
   # (elige el caso de uso por routeKey).
   PortfoliosFunction:
     Type: AWS::Serverless::Function
@@ -200,6 +200,12 @@ Resources:
             ApiId: !Ref HttpApi
             Path: /portfolios/{portfolioId}/holdings
             Method: POST
+        PortfolioMetrics:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /portfolios/{portfolioId}/metrics
+            Method: GET
         UpdateHolding:
           Type: HttpApi
           Properties:
