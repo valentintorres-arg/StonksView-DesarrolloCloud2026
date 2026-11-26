@@ -15,15 +15,17 @@ UTN Facultad Regional La Plata
 
 - Usuarios objetivo: - **Primario:** personas con inversiones distribuidas en más de una plataforma (cripto + banco + broker) que hoy arman su patrimonio a mano en una planilla y no tienen ninguna vista unificada.
 
-- Stack tentativo: 
+- Stack:
 
-| Componente | Tecnología propuesta | Justificación |
+| Componente | Tecnología | Justificación |
 |---|---|---|
-| Frontend | Next.js sobre Vercel | Despliegue rápido, ideal para iterar con equipo de 3 personas en tiempo acotado. |
-| Backend / API | Funciones serverless (Next.js API routes) | Alcanza para el alcance del MVP; no se necesita un proceso persistente porque no hay scheduler ni notificaciones push en esta versión. |
-| Persistencia | Supabase (PostgreSQL gestionado), con Row-Level Security por usuario | Dato financiero sensible — RLS asegura que un usuario nunca pueda leer tenencias de otro, incluso ante un bug de autorización en el API. |
-| Autenticación | Supabase Auth | Sesión por usuario, requisito básico para cualquier dato patrimonial. |
-| IA | API de un LLM gestionado, recibiendo como contexto las métricas ya calculadas por el sistema (sin vector DB, sin RAG completo) | El "conocimiento" que necesita el modelo ya está en las tablas del propio producto; armar una base vectorial sería sobre-ingeniería para este volumen de datos por usuario. |
-| Precios de mercado *(stretch goal)* | API pública gratuita (CoinGecko / Yahoo Finance) para valuar tenencias automáticamente | Si el tiempo no alcanza, la carga de precio queda manual como fallback — no bloquea el resto del producto. |
+| Frontend | Next.js con export estático, servido desde S3 + CloudFront | Toda la app es cliente (la sesión vive en Supabase Auth y los datos vienen de la API), así que no necesita servidor: archivos estáticos detrás de una CDN. |
+| Backend / API | API Gateway (HTTP API) + AWS Lambda en Node.js 22, desplegadas con AWS SAM | Serverless: se paga por request y no hay servidor ocioso. La lógica vive en `backend/src/core` y los handlers son adaptadores finos, para poder pasar a Vercel (Plan B) sin reescribirla. |
+| Persistencia | Supabase (PostgreSQL gestionado), con Row-Level Security por portfolio | Dato financiero sensible: RLS asegura que un usuario nunca pueda leer tenencias de otro, incluso ante un bug de autorización en la API. Las operaciones atómicas (`transfer_holding`, `sell_holding`) son funciones de Postgres. |
+| Autenticación | Supabase Auth | Sesión por usuario; las Lambdas reenvían el JWT a Supabase para que RLS se aplique. |
+| IA | Modelo open-source (Llama) vía la API de Groq, recibiendo como contexto las métricas ya calculadas por el sistema (sin vector DB, sin RAG) | El "conocimiento" que necesita el modelo ya está en las tablas del propio producto; armar una base vectorial sería sobre-ingeniería para este volumen de datos por usuario. |
+| Precios de mercado | CoinGecko (cripto) y Yahoo Finance (acciones, ETF y CEDEAR), cacheados en `price_cache` por 5 minutos | Valúan las tenencias automáticamente; si la API falla se usa el último precio guardado, y la carga manual queda de respaldo. |
+| Alertas y notificaciones | EventBridge Scheduler invoca una Lambda de chequeo; envío con Web Push (`web-push`, claves VAPID) | Chequeo periódico sin un proceso corriendo 24/7. |
+| CI/CD y observabilidad | GitHub Actions (CI en cada PR, deploy al mergear a `main`); logs en CloudWatch y `GET /health` verificado después de cada deploy | El deploy queda automatizado y se detecta enseguida si rompió la conexión con la base. |
 
-*Stack tentativo sujeto a ajuste en el Checkpoint 1, una vez definida la arquitectura cloud en detalle.*
+Los Planes B (Vercel para frontend y backend, GitHub Actions schedule o Vercel Cron para las alertas) y el detalle de cada decisión están en `StonksView_Arquitectura.md` y en `plan a seguir.md`.
