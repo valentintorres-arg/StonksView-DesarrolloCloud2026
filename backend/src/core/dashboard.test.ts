@@ -124,4 +124,19 @@ describe("getDashboard", () => {
     expect((await getDashboard({ portfolioId: P }, portfolios, failing, onError)).status).toBe(500);
     expect(onError).toHaveBeenCalled();
   });
+
+  it("valúa con los precios que trae el refresco, no solo con el cache", async () => {
+    const { portfolios, priceStore } = stores([lot("a", "BTC", "2", "40000")], []);
+    const refresh = vi.fn(async () => [price("BTC", "60000", "2026-11-26T12:00:00Z")]);
+
+    const outcome = await getDashboard({ portfolioId: P }, portfolios, priceStore, noop, refresh);
+
+    expect(refresh).toHaveBeenCalledWith([{ symbol: "BTC", assetClass: "crypto" }], []);
+    expect(outcome.status).toBe(200);
+    if (outcome.status !== 200) return;
+    expect(outcome.body.metrics.unpricedHoldings).toEqual([]);
+    expect(outcome.body.prices).toEqual([
+      { symbol: "BTC", assetClass: "crypto", price: "60000", source: "coingecko", fetchedAt: "2026-11-26T12:00:00Z" },
+    ]);
+  });
 });

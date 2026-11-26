@@ -4,7 +4,7 @@
 // y el mapeo de errores viven en core/portfolios y core/dashboard.
 
 import type { APIGatewayProxyEventV2, APIGatewayProxyHandlerV2, APIGatewayProxyStructuredResultV2 } from "aws-lambda";
-import { getDashboard, type PriceStore } from "../core/dashboard";
+import { getDashboard, type PriceRow, type PriceStore } from "../core/dashboard";
 import {
   createHolding,
   createPortfolio,
@@ -14,15 +14,20 @@ import {
   type PortfolioStore,
   updateHolding,
 } from "../core/portfolios";
+import { type Asset, refreshStalePrices, type PriceProvider, type PriceWriter } from "../core/prices";
 import type { Outcome } from "../core/rpc";
 import { json } from "./http";
-import { supabasePortfolioStore, supabasePriceStore } from "./portfolio-store";
+import { supabasePortfolioStore, supabasePriceStore, supabasePriceWriter } from "./portfolio-store";
+import { coinGeckoProvider, yahooProvider } from "./price-providers";
 import { NO_STORE, readAuthenticatedJson } from "./request";
-import { supabaseForUser } from "./supabase";
+import { supabaseForUser, supabaseService } from "./supabase";
 
 export interface Stores {
   portfolios: PortfolioStore;
   prices: PriceStore;
+  // Refresco de precios vencidos (tarea 4.4). Opcional para los tests.
+  priceProviders?: PriceProvider[];
+  priceWriter?: PriceWriter | null;
 }
 
 export type StoreFactory = (accessToken: string) => Stores;
@@ -42,6 +47,15 @@ function dispatch(event: APIGatewayProxyEventV2, body: unknown, stores: Stores):
   const params = event.pathParameters ?? {};
   const query = event.queryStringParameters ?? {};
   const store = stores.portfolios;
+  const { priceProviders, priceWriter = null } = stores;
+  const refresh = priceProviders?.length
+    ? (assets: Asset[], cached: PriceRow[]) =>
+        refreshStalePrices(assets, cached, {
+          providers: priceProviders,
+          writer: priceWriter,
+          onError: (error) => console.warn("No se pudieron refrescar precios", error),
+        })
+    : undefined;
 
   switch (event.routeKey) {
     case "GET /portfolios":
@@ -58,6 +72,7 @@ function dispatch(event: APIGatewayProxyEventV2, body: unknown, stores: Stores):
         store,
         stores.prices,
         onError,
+        refresh,
       );
     case "PATCH /holdings/{holdingId}":
       return updateHolding(params.holdingId, body, store, onError);
@@ -81,7 +96,17 @@ export function createHandler(storesFor: StoreFactory): APIGatewayProxyHandlerV2
   };
 }
 
+// Fuera del handler: se reutilizan entre invocaciones del mismo contenedor.
+const priceProviders = [coinGeckoProvider(), yahooProvider()];
+const serviceClient = supabaseService();
+const priceWriter = serviceClient ? supabasePriceWriter(serviceClient) : null;
+
 export const handler = createHandler((token) => {
   const client = supabaseForUser(token);
-  return { portfolios: supabasePortfolioStore(client), prices: supabasePriceStore(client) };
+  return {
+    portfolios: supabasePortfolioStore(client),
+    prices: supabasePriceStore(client),
+    priceProviders,
+    priceWriter,
+  };
 });

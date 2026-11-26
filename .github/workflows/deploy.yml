@@ -7,6 +7,8 @@ name: Deploy
 # Credenciales: el usuario IAM github-actions-deploy (policy StonksViewGitHubDeploy,
 # acotada a recursos stonksview-* en us-east-2). Sus access keys van como secrets
 # AWS_ACCESS_KEY_ID y AWS_SECRET_ACCESS_KEY del environment production.
+# SUPABASE_SERVICE_ROLE_KEY también va como secret de production: la Lambda de
+# portfolios la usa solo para escribir price_cache (tarea 4.4).
 # No se usa OIDC porque la SCP del plan free de AWS bloquea crear el identity provider.
 # El nombre del stack de SAM tiene que empezar con "stonksview" para que la policy aplique.
 #
@@ -47,7 +49,8 @@ jobs:
           sam deploy --no-confirm-changeset --no-fail-on-empty-changeset \
             --parameter-overrides \
               "SupabaseUrl=${{ vars.SUPABASE_URL }}" \
-              "SupabaseAnonKey=${{ vars.SUPABASE_ANON_KEY }}"
+              "SupabaseAnonKey=${{ vars.SUPABASE_ANON_KEY }}" \
+              "SupabaseServiceRoleKey=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"
 
       # Frontend: export estático a S3 + invalidación de CloudFront (tarea 3.5)
       - uses: pnpm/action-setup@v4
