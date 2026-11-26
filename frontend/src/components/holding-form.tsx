@@ -8,7 +8,7 @@ import { useId, useState, type FormEvent } from "react";
 import { Field } from "@/components/form-field";
 import { PortfolioGate } from "@/components/portfolio-gate";
 import { api, ApiError, type Holding, type Portfolio } from "@/lib/api";
-import { ASSET_CLASS_OPTIONS, SOURCE_TYPE_OPTIONS, money, sourceTypeLabel } from "@/lib/format";
+import { ASSET_CLASS_OPTIONS, SOURCE_TYPE_OPTIONS, money, quantity, sourceTypeLabel } from "@/lib/format";
 import {
   EMPTY_HOLDING_FORM,
   findSource,
@@ -24,8 +24,8 @@ import { errorMessage, useLoad } from "@/lib/use-load";
 export function NewHoldingScreen() {
   return (
     <div className="mx-auto w-full max-w-2xl px-6 py-8">
-      <Link href="/" className="text-sm text-neutral-500 hover:underline">
-        ← Volver al dashboard
+      <Link href="/tenencias/" className="text-sm text-neutral-500 hover:underline">
+        ← Volver a tenencias
       </Link>
       <h1 className="mt-3 text-2xl font-bold">Nueva tenencia</h1>
       <p className="mt-1 text-sm text-neutral-500">
@@ -274,7 +274,7 @@ function PortfolioHoldingForm({ portfolio }: { portfolio: Portfolio }) {
         >
           {pending ? "Guardando…" : "Guardar tenencia"}
         </button>
-        <Link href="/" className="text-sm text-neutral-500 hover:underline">
+        <Link href="/tenencias/" className="text-sm text-neutral-500 hover:underline">
           Cancelar
         </Link>
       </div>
@@ -321,12 +321,11 @@ function SourceNameField({
 }
 
 function SavedHolding({ holding, currency, onAnother }: { holding: Holding; currency: string; onAnother: () => void }) {
-  const quantity = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 8 }).format(Number(holding.quantity));
   return (
     <div role="status" className="mt-8 rounded-lg border border-emerald-600/40 bg-emerald-50 p-5 dark:bg-emerald-950/30">
       <p className="font-semibold text-emerald-800 dark:text-emerald-300">Tenencia guardada</p>
       <p className="mt-1 text-sm">
-        {quantity} {holding.symbol} en {holding.sourceName}
+        {quantity(holding.quantity)} {holding.symbol} en {holding.sourceName}
         {holding.costBasis !== null && ` a ${money(holding.costBasis, currency)} por unidad`}.
       </p>
       <div className="mt-4 flex flex-wrap gap-3">
@@ -338,10 +337,10 @@ function SavedHolding({ holding, currency, onAnother }: { holding: Holding; curr
           Cargar otra
         </button>
         <Link
-          href="/"
+          href={`/tenencias/?lote=${encodeURIComponent(holding.id)}`}
           className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-900"
         >
-          Ver dashboard
+          Ver en tenencias
         </Link>
       </div>
     </div>
