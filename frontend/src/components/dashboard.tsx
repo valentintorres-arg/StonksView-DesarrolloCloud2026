@@ -3,9 +3,11 @@
 // Dashboard consolidado (tarea 3.3): patrimonio total y composición por sede y
 // por clase de activo, con las métricas que calcula el backend
 // (GET /portfolios/{id}/metrics). Acá no se calcula nada: solo se muestra.
+// Debajo, las tenencias del portfolio y su alta manual (tarea 3.2).
 
 import { useState, type FormEvent } from "react";
 import { ErrorBox, Status } from "@/components/feedback";
+import { Holdings } from "@/components/holdings";
 import { api, type Dashboard as DashboardData, type Portfolio } from "@/lib/api";
 import { errorMessage, useLoad } from "@/lib/use-load";
 import { assetClassLabel, dateTime, money, percent, signedMoney, sourceTypeLabel } from "@/lib/format";
@@ -20,6 +22,7 @@ export function Dashboard() {
   // El elegido, o el primero si todavía no se eligió ninguno.
   const selected = chosen ?? portfolios.data[0]?.id ?? null;
   const setSelected = setChosen;
+  const selectedPortfolio = portfolios.data.find((p) => p.id === selected) ?? null;
   if (portfolios.data.length === 0) {
     return (
       <CreatePortfolio
@@ -49,8 +52,20 @@ export function Dashboard() {
           </select>
         </label>
       )}
-      {selected && <PortfolioMetrics key={selected} portfolioId={selected} />}
+      {selectedPortfolio && <PortfolioView key={selectedPortfolio.id} portfolio={selectedPortfolio} />}
     </div>
+  );
+}
+
+// Métricas y tenencias del portfolio. Cargar un lote cambia los números:
+// `version` remonta las métricas para que se vuelvan a pedir.
+function PortfolioView({ portfolio }: { portfolio: Portfolio }) {
+  const [version, setVersion] = useState(0);
+  return (
+    <>
+      <PortfolioMetrics key={version} portfolioId={portfolio.id} />
+      <Holdings portfolioId={portfolio.id} currency={portfolio.baseCurrency} onChanged={() => setVersion((v) => v + 1)} />
+    </>
   );
 }
 
