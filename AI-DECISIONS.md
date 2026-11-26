@@ -177,6 +177,14 @@ Este archivo documenta el razonamiento técnico detrás de cada fragmento de có
 
 ---
 
+## 26/11/2026 — Export estático del frontend para S3 + CloudFront (tarea 3.5, issue #30)
+- **Problema abordado:** El workflow de deploy ya sube `frontend/out` a S3 e invalida CloudFront, pero Next no estaba configurado para exportar: `pnpm build` no generaba `out/` y el paso de publicación del frontend iba a fallar. Además, un origen S3 solo resuelve `index.html` en la raíz, así que entrar directo a `/login` o recargar en `/registro` daba error.
+- **Prompt / Herramienta utilizada:** Claude Code, pidiéndole tomar las tareas asignadas que estuvieran desbloqueadas.
+- **Código / Arquitectura generada:** `next.config.ts` con `output: "export"`, `trailingSlash: true` (cada ruta sale como `<ruta>/index.html`) e `images.unoptimized` (sin servidor no hay optimizador). `infra/cloudfront/rewrite-index.js`: CloudFront Function de viewer-request que reescribe `/login` y `/login/` a `/login/index.html` y deja pasar los assets con extensión.
+- **Validación y Corrección Humana:** Se compiló con las mismas variables que usa el workflow: las cuatro rutas son estáticas y `out/` contiene `index.html`, `login/index.html` y `registro/index.html`. La función se probó en Node con la raíz, rutas con y sin barra final, `/_next/...` y `favicon.ico`. Se eligió la función en lugar de usar el bucket como website endpoint para mantener el bucket privado detrás de CloudFront. La distribución se creó a mano en la consola, no por IaC, así que la función se tiene que asociar ahí (viewer-request, runtime `cloudfront-js-2.0`); la carga desde la URL de CloudFront queda por verificar cuando se habilite el deploy.
+
+---
+
 ## 26/11/2026 — Precios actuales con `price_cache` (tarea 4.4, issue #34)
 - **Problema abordado:** El dashboard valuaba solo con precios cargados a mano en `price_cache`; sin ellos, todas las tenencias quedaban "sin precio". RN-19 y RN-20 piden traerlos de CoinGecko (cripto) y Yahoo Finance (acciones, ETF y CEDEAR), con 5 minutos de vigencia, y que una API caída no rompa el dashboard.
 - **Prompt / Herramienta utilizada:** Claude Code, pidiéndole tomar las tareas asignadas que estuvieran desbloqueadas.
