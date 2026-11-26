@@ -5,6 +5,7 @@
 import type { APIGatewayProxyHandlerV2 } from "aws-lambda";
 import { createSale, type SellHoldingRpc } from "../core/sales";
 import { json } from "./http";
+import { withRequestLog } from "./observability";
 import { NO_STORE, readAuthenticatedJson } from "./request";
 import { supabaseForUser } from "./supabase";
 
@@ -27,4 +28,4 @@ export function createHandler(rpcFor: RpcFactory): APIGatewayProxyHandlerV2 {
   };
 }
 
-export const handler = createHandler(supabaseRpc);
+export const handler = withRequestLog(createHandler(supabaseRpc));

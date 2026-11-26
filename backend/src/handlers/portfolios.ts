@@ -17,6 +17,7 @@ import {
 import { type Asset, refreshStalePrices, type PriceProvider, type PriceWriter } from "../core/prices";
 import type { Outcome } from "../core/rpc";
 import { json } from "./http";
+import { withRequestLog } from "./observability";
 import { supabasePortfolioStore, supabasePriceStore, supabasePriceWriter } from "./portfolio-store";
 import { coinGeckoProvider, yahooProvider } from "./price-providers";
 import { NO_STORE, readAuthenticatedJson } from "./request";
@@ -101,12 +102,14 @@ const priceProviders = [coinGeckoProvider(), yahooProvider()];
 const serviceClient = supabaseService();
 const priceWriter = serviceClient ? supabasePriceWriter(serviceClient) : null;
 
-export const handler = createHandler((token) => {
-  const client = supabaseForUser(token);
-  return {
-    portfolios: supabasePortfolioStore(client),
-    prices: supabasePriceStore(client),
-    priceProviders,
-    priceWriter,
-  };
-});
+export const handler = withRequestLog(
+  createHandler((token) => {
+    const client = supabaseForUser(token);
+    return {
+      portfolios: supabasePortfolioStore(client),
+      prices: supabasePriceStore(client),
+      priceProviders,
+      priceWriter,
+    };
+  }),
+);
