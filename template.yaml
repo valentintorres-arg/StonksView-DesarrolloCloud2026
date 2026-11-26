@@ -17,6 +17,13 @@ Parameters:
     Type: String
     NoEcho: true
     Description: Clave anon de Supabase (SUPABASE_ANON_KEY). Pública, pero no se muestra en la consola.
+  SupabaseServiceRoleKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: >-
+      Clave service_role de Supabase (SUPABASE_SERVICE_ROLE_KEY). SECRETA. Solo la recibe
+      PortfoliosFunction, para escribir price_cache. Vacía: los precios se usan sin cachearse.
 
 Globals:
   Function:
@@ -175,6 +182,11 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       Handler: portfolios.handler
+      # El GET de métricas refresca precios vencidos (tarea 4.4): llama a
+      # CoinGecko/Yahoo con timeout de 2,5 s y guarda en price_cache.
+      Environment:
+        Variables:
+          SUPABASE_SERVICE_ROLE_KEY: !Ref SupabaseServiceRoleKey
       Events:
         ListPortfolios:
           Type: HttpApi

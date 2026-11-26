@@ -1,8 +1,8 @@
-// Cliente de Supabase por usuario para las Lambdas.
+// Clientes de Supabase para las Lambdas.
 //
-// Usa la clave anon más el JWT del usuario que llamó, así PostgREST ejecuta
-// todo como ese usuario y las políticas RLS se aplican. Nunca usar acá la
-// service_role: saltearía RLS.
+// supabaseForUser usa la clave anon más el JWT del usuario que llamó, así
+// PostgREST ejecuta todo como ese usuario y las políticas RLS se aplican.
+// Nunca usar la service_role para datos de un usuario: saltearía RLS.
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { APIGatewayProxyEventV2 } from "aws-lambda";
@@ -25,4 +25,17 @@ export function bearerToken(event: Pick<APIGatewayProxyEventV2, "headers">): str
   const header = event.headers?.authorization ?? event.headers?.Authorization;
   const match = header ? /^Bearer\s+(\S+)$/i.exec(header.trim()) : null;
   return match?.[1] ?? null;
+}
+
+// Cliente con la service_role, solo para escribir price_cache: es compartida
+// entre usuarios y RLS no deja escribirla a `authenticated` (si pudieran,
+// cualquiera podría falsear el precio de todos). Devuelve null si la clave no
+// está configurada; los precios se usan igual, sin cachearlos.
+export function supabaseService(): SupabaseClient | null {
+  const url = process.env.SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceKey) return null;
+  return createClient(url, serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 }

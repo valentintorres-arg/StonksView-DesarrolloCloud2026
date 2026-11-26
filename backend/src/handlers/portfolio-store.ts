@@ -4,6 +4,7 @@
 
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import type { PriceRow, PriceStore } from "../core/dashboard";
+import type { PriceWriter } from "../core/prices";
 import type { HoldingRow, PortfolioRow, PortfolioStore, StoreResult } from "../core/portfolios";
 
 const PORTFOLIO_COLUMNS = "id, name, base_currency, created_at";
@@ -83,6 +84,16 @@ export function supabasePriceStore(client: SupabaseClient): PriceStore {
         .select("symbol, asset_class, source, price::text, currency, fetched_at")
         .in("symbol", symbols);
       return result<PriceRow[]>(response as Response<PriceRow[]>, []);
+    },
+  };
+}
+
+// Escritura de price_cache con el cliente de supabaseService (service_role).
+export function supabasePriceWriter(client: SupabaseClient): PriceWriter {
+  return {
+    async upsert(rows) {
+      const { error } = await client.from("price_cache").upsert(rows, { onConflict: "symbol,asset_class,source" });
+      if (error) throw new Error(`No se pudo guardar price_cache: ${error.message}`);
     },
   };
 }
