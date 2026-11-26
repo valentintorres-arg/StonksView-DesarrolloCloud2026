@@ -1,6 +1,7 @@
 "use client";
 
-// Barra superior de las pantallas privadas: marca, email y cierre de sesión.
+// Barra superior de las pantallas privadas: marca, alta de tenencia (siempre
+// visible, según la spec), email y cierre de sesión.
 
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
@@ -15,6 +16,14 @@ export function AppHeader() {
         StonksView
       </Link>
       <div className="flex items-center gap-2 text-sm sm:gap-4">
+        <Link
+          href="/tenencias/nueva/"
+          aria-label="Nueva tenencia"
+          className="whitespace-nowrap rounded-md bg-emerald-700 px-3 py-1.5 font-semibold text-white hover:bg-emerald-800"
+        >
+          <span className="sm:hidden">+ Tenencia</span>
+          <span className="hidden sm:inline">Nueva tenencia</span>
+        </Link>
         <span className="hidden text-neutral-500 sm:inline">{email}</span>
         <button
           type="button"

@@ -4,6 +4,7 @@
 // por clase de activo, con las métricas que calcula el backend
 // (GET /portfolios/{id}/metrics). Acá no se calcula nada: solo se muestra.
 
+import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { api, type Dashboard as DashboardData, type Portfolio } from "@/lib/api";
 import { assetClassLabel, dateTime, money, percent, signedMoney, sourceTypeLabel } from "@/lib/format";
@@ -62,6 +63,7 @@ function PortfolioMetrics({ portfolioId }: { portfolioId: string }) {
 
   const { portfolio, metrics, pricesAsOf } = dashboard.data;
   const currency = portfolio.baseCurrency;
+  if (metrics.valuedLots === 0 && metrics.unpricedHoldings.length === 0) return <EmptyPortfolio name={portfolio.name} />;
   const gain = metrics.unrealizedGain;
   const gainSign = Number(gain.value) > 0 ? "▲" : Number(gain.value) < 0 ? "▼" : "";
   const concentrated = [
@@ -130,6 +132,25 @@ function PortfolioMetrics({ portfolioId }: { portfolioId: string }) {
           currency={currency}
         />
       </div>
+    </section>
+  );
+}
+
+// Estado vacío (P2 de la spec): todavía no hay ninguna tenencia cargada.
+function EmptyPortfolio({ name }: { name: string }) {
+  return (
+    <section className="mx-auto mt-8 max-w-md text-center">
+      <h1 className="text-2xl font-bold">{name}</h1>
+      <p className="mt-3 text-sm text-neutral-500">
+        Todavía no cargaste tenencias. Sumá lo que tenés en cada exchange, wallet, broker o banco y acá vas a ver tu
+        patrimonio consolidado.
+      </p>
+      <Link
+        href="/tenencias/nueva/"
+        className="mt-6 inline-block rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
+      >
+        Cargar mi primera tenencia
+      </Link>
     </section>
   );
 }
