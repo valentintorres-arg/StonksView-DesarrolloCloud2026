@@ -201,6 +201,14 @@ Este archivo documenta el razonamiento técnico detrás de cada fragmento de có
 
 ---
 
+## 26/11/2026 — Variables de entorno de Supabase para desarrollo local
+- **Problema abordado:** Para correr la app en local hacía falta que alguien pasara a mano la URL y la anon key de Supabase, y cada integrante armaba `.env` y `frontend/.env.local` por su cuenta. La propuesta del equipo fue cargar el ambiente en GitHub como variables de entorno.
+- **Prompt / Herramienta utilizada:** Claude Code, pidiéndole hacer el setup del ambiente de Supabase en el repo.
+- **Código / Arquitectura generada:** `scripts/setup-env.mjs`: lee `SUPABASE_URL` y `SUPABASE_ANON_KEY` de las variables del repo con `gh variable get` y escribe `.env` (API local) y `frontend/.env.local` (con prefijo `NEXT_PUBLIC_` y `NEXT_PUBLIC_API_URL` apuntando a la API local). Si los archivos existen, reemplaza solo esas claves. Sección "Desarrollo local" en `readme.md` (qué valor va en cada lugar, paso a paso, problemas comunes y cómo rotar las variables) y referencias al script en los dos `.env.example`.
+- **Validación y Corrección Humana:** Se aclaró que los secrets de GitHub solo los leen los workflows de Actions, así que no sirven para desarrollo local; por eso el script lee únicamente variables, y solo las que son públicas (la anon key lo es por diseño: lo que protege los datos es RLS). `service_role`, `DATABASE_URL` y Groq quedan como secrets y se comparten por canal seguro. Se usaron los mismos nombres que ya espera `deploy.yml` (`vars.SUPABASE_URL`, `vars.SUPABASE_ANON_KEY`) para no duplicar valores. Se probó que el script conserva otras claves del `.env` (por ejemplo `DATABASE_URL`), que correrlo dos veces no duplica líneas y que, si falta una variable, falla sin escribir nada. Supabase avisó que retira las API keys legacy en 2027, así que se cargó la *publishable key* (`sb_publishable_...`) en lugar de la anon JWT; se revisó que el código solo pasa la clave a `createClient` y no la decodifica como JWT. Con las variables cargadas, se corrió el script y se levantó la app: `/health` respondió 200 contra la base, el frontend mostró el login, Auth respondió con la clave nueva y, sin sesión, `portfolios` devolvió `permission denied`.
+
+---
+
 ## 26/11/2026 — Observabilidad en CloudWatch (tarea 2.4, issue #24)
 - **Problema abordado:** Las Lambdas solo escribían `console.error` sueltos: no había forma de ver un request con su id y su latencia, ni alarma, ni dashboard.
 - **Prompt / Herramienta utilizada:** Claude Code, pidiéndole tomar las tareas de Bautista que estuvieran desbloqueadas. La tarea estaba sugerida a otro integrante y no tenía trabajo empezado.
