@@ -30,7 +30,8 @@ Plan de trabajo del equipo, organizado por fases. Cada tarea tiene su issue en G
 - **Lógica atómica:** funciones Postgres (`transfer_holding`, `sell_holding`) invocadas por RPC.
 - **IA:** LLM vía Groq, que recibe métricas ya calculadas y solo devuelve texto.
 - **Scheduler:** EventBridge Scheduler para alertas (Plan B3: GitHub Actions schedule o Vercel Cron).
-- **CI/CD:** GitHub Actions.
+- **Precios:** CoinGecko (cripto) y Yahoo Finance (acciones, ETF y CEDEAR), refrescados bajo demanda con 5 minutos de vigencia en `price_cache`.
+- **CI/CD:** GitHub Actions. El deploy usa access keys de un usuario IAM acotado a `stonksview-*` en lugar del rol OIDC que pedía la tarea 0.3: la SCP del plan free de AWS bloquea crear el proveedor OIDC.
 
 ---
 
