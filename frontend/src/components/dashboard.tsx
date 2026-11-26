@@ -4,44 +4,12 @@
 // por clase de activo, con las métricas que calcula el backend
 // (GET /portfolios/{id}/metrics). Acá no se calcula nada: solo se muestra.
 
-import { useEffect, useState, type FormEvent } from "react";
-import { api, ApiError, type Dashboard as DashboardData, type Portfolio } from "@/lib/api";
+import Link from "next/link";
+import { useState, type FormEvent } from "react";
+import { api, type Dashboard as DashboardData, type Portfolio } from "@/lib/api";
 import { assetClassLabel, dateTime, money, percent, signedMoney, sourceTypeLabel } from "@/lib/format";
-
-type Load<T> = { state: "loading" } | { state: "error"; message: string } | { state: "ready"; data: T };
-
-// Carga `fetcher` al montar y cada vez que cambia `deps` o se llama a
-// `reload`. El estado solo se actualiza cuando llega la respuesta (y se
-// descarta si el componente ya cambió de datos).
-function useLoad<T>(fetcher: () => Promise<T>, deps: unknown[]) {
-  const [result, setResult] = useState<Load<T>>({ state: "loading" });
-  const [attempt, setAttempt] = useState(0);
-
-  useEffect(() => {
-    let active = true;
-    fetcher().then(
-      (data) => active && setResult({ state: "ready", data }),
-      (error) => active && setResult({ state: "error", message: errorMessage(error) }),
-    );
-    return () => {
-      active = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...deps, attempt]);
-
-  const reload = () => {
-    setResult({ state: "loading" });
-    setAttempt((n) => n + 1);
-  };
-  return [result, setResult, reload] as const;
-}
-
-function errorMessage(error: unknown): string {
-  if (error instanceof ApiError && error.status === 0) {
-    return "No se pudo conectar con la API. En desarrollo, corré `npm run dev` en backend/.";
-  }
-  return error instanceof Error ? error.message : "Ocurrió un error inesperado.";
-}
+import { ErrorBox, Status } from "@/components/feedback";
+import { errorMessage, useLoad } from "@/lib/use-load";
 
 export function Dashboard() {
   const [portfolios, setPortfolios, reloadPortfolios] = useLoad(api.listPortfolios, []);
@@ -95,6 +63,7 @@ function PortfolioMetrics({ portfolioId }: { portfolioId: string }) {
 
   const { portfolio, metrics, pricesAsOf } = dashboard.data;
   const currency = portfolio.baseCurrency;
+  if (metrics.valuedLots === 0 && metrics.unpricedHoldings.length === 0) return <EmptyPortfolio name={portfolio.name} />;
   const gain = metrics.unrealizedGain;
   const gainSign = Number(gain.value) > 0 ? "▲" : Number(gain.value) < 0 ? "▼" : "";
   const concentrated = [
@@ -167,6 +136,25 @@ function PortfolioMetrics({ portfolioId }: { portfolioId: string }) {
   );
 }
 
+// Estado vacío (P2 de la spec): todavía no hay ninguna tenencia cargada.
+function EmptyPortfolio({ name }: { name: string }) {
+  return (
+    <section className="mx-auto mt-8 max-w-md text-center">
+      <h1 className="text-2xl font-bold">{name}</h1>
+      <p className="mt-3 text-sm text-neutral-500">
+        Todavía no cargaste tenencias. Sumá lo que tenés en cada exchange, wallet, broker o banco y acá vas a ver tu
+        patrimonio consolidado.
+      </p>
+      <Link
+        href="/tenencias/nueva/"
+        className="mt-6 inline-block rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
+      >
+        Cargar mi primera tenencia
+      </Link>
+    </section>
+  );
+}
+
 function StatTile({ label, value, detail }: { label: string; value: string; detail: string }) {
   return (
     <div className="rounded-lg border border-neutral-200 p-5 dark:border-neutral-800">
@@ -229,25 +217,6 @@ function Notice({ icon, title, children }: { icon: string; title: string; childr
       <p>
         <strong className="font-semibold">{title}.</strong> <span className="text-neutral-500">{children}</span>
       </p>
-    </div>
-  );
-}
-
-function Status({ children }: { children: React.ReactNode }) {
-  return (
-    <p role="status" className="py-16 text-center text-sm text-neutral-500">
-      {children}
-    </p>
-  );
-}
-
-function ErrorBox({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return (
-    <div role="alert" className="mx-auto mt-16 max-w-md rounded-md bg-red-50 px-4 py-3 text-sm text-red-800 dark:bg-red-950/40 dark:text-red-300">
-      <p>{message}</p>
-      <button type="button" onClick={onRetry} className="mt-2 font-semibold underline">
-        Reintentar
-      </button>
     </div>
   );
 }

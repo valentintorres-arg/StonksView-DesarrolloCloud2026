@@ -11,6 +11,41 @@ export interface Portfolio {
   createdAt: string;
 }
 
+// Un lote: una compra concreta en una sede. `costBasis` es POR UNIDAD.
+export interface Holding {
+  id: string;
+  portfolioId: string;
+  symbol: string;
+  assetClass: string;
+  quantity: string;
+  costBasis: string | null;
+  fee: string | null;
+  sourceType: string;
+  sourceName: string;
+  acquiredAt: string | null;
+  lockupExpiry: string | null;
+  ratio: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Lo que se manda al crear un lote (POST /portfolios/{id}/holdings). Los
+// números van como string decimal para no perder precisión.
+export interface NewHolding {
+  symbol: string;
+  assetClass: string;
+  quantity: string;
+  costBasis: string | null;
+  fee: string | null;
+  sourceType: string;
+  sourceName: string;
+  acquiredAt: string | null;
+  lockupExpiry: string | null;
+  ratio: string | null;
+  notes: string | null;
+}
+
 export interface Breakdown {
   value: string;
   sharePercent: string | null;
@@ -64,6 +99,8 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    // Detalle de validación de la API (400), por campo.
+    readonly issues: string[] = [],
   ) {
     super(message);
   }
@@ -97,7 +134,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (response.status === 204) return undefined as T;
   const body = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new ApiError(response.status, body?.message ?? "La API respondió con un error.");
+    throw new ApiError(
+      response.status,
+      body?.message ?? "La API respondió con un error.",
+      Array.isArray(body?.issues) ? body.issues : [],
+    );
   }
   return body as T;
 }
@@ -106,5 +147,11 @@ export const api = {
   listPortfolios: () => request<Portfolio[]>("/portfolios"),
   createPortfolio: (name: string, baseCurrency = "USD") =>
     request<Portfolio>("/portfolios", { method: "POST", body: JSON.stringify({ name, baseCurrency }) }),
+  listHoldings: (portfolioId: string) => request<Holding[]>(`/portfolios/${encodeURIComponent(portfolioId)}/holdings`),
+  createHolding: (portfolioId: string, holding: NewHolding) =>
+    request<Holding>(`/portfolios/${encodeURIComponent(portfolioId)}/holdings`, {
+      method: "POST",
+      body: JSON.stringify(holding),
+    }),
   dashboard: (portfolioId: string) => request<Dashboard>(`/portfolios/${encodeURIComponent(portfolioId)}/metrics`),
 };
