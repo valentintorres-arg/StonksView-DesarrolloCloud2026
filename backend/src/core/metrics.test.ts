@@ -194,4 +194,84 @@ describe("computePortfolioMetrics", () => {
 
     expect(metrics.totalValue).toBe("0.30000001");
   });
+
+  describe("positions", () => {
+    it("agrupa los lotes por símbolo y clase con valor, costo promedio y ganancia", () => {
+      const metrics = computePortfolioMetrics(
+        [
+          lot({ id: "a", quantity: "1", costBasis: "30000", fee: "10", sourceName: "Binance" }),
+          lot({ id: "b", quantity: "0.5", costBasis: "60000", sourceName: " binance" }),
+          lot({ id: "c", quantity: "0.5", costBasis: null, sourceName: "Ledger", sourceType: "wallet" }),
+        ],
+        prices({ "crypto:BTC": "50000" }),
+      );
+
+      expect(metrics.positions).toHaveLength(1);
+      const [btc] = metrics.positions;
+      expect(btc).toMatchObject({
+        symbol: "BTC",
+        assetClass: "crypto",
+        quantity: "2",
+        price: "50000",
+        value: "100000",
+        sharePercent: "100.00",
+        // (1 × 30000 + 0.5 × 60000) / 1.5, sin la comisión
+        averageCost: "40000",
+        // a: 50000 − 30010 = 19990; b: 25000 − 30000 = −5000; c sin costo
+        unrealizedGain: "14990",
+        // 14990 / 60010
+        unrealizedGainPercent: "24.98",
+        sources: 2,
+      });
+      expect(btc!.lots).toEqual([
+        { id: "a", sourceName: "Binance", quantity: "1", costBasis: "30000", value: "50000", unrealizedGain: "19990" },
+        { id: "b", sourceName: "binance", quantity: "0.5", costBasis: "60000", value: "25000", unrealizedGain: "-5000" },
+        { id: "c", sourceName: "Ledger", quantity: "0.5", costBasis: null, value: "25000", unrealizedGain: null },
+      ]);
+    });
+
+    it("deja sin valor ni ganancia las posiciones sin precio y las ordena al final", () => {
+      const metrics = computePortfolioMetrics(
+        [
+          lot({ symbol: "ZZZ", assetClass: "other", costBasis: "5" }),
+          lot({ symbol: "ETH", quantity: "2" }),
+          lot({ symbol: "AAA", assetClass: "other" }),
+          lot({ symbol: "BTC", quantity: "1" }),
+        ],
+        prices({ "crypto:ETH": "3000", "crypto:BTC": "50000" }),
+      );
+
+      expect(metrics.positions.map((p) => p.symbol)).toEqual(["BTC", "ETH", "AAA", "ZZZ"]);
+      expect(metrics.positions[3]).toMatchObject({
+        price: null,
+        value: null,
+        sharePercent: null,
+        averageCost: "5",
+        unrealizedGain: null,
+        unrealizedGainPercent: null,
+      });
+      expect(metrics.positions[3]!.lots[0]).toMatchObject({ value: null, unrealizedGain: null });
+    });
+
+    it("separa el mismo símbolo en distintas clases de activo e ignora lotes agotados", () => {
+      const metrics = computePortfolioMetrics(
+        [
+          lot({ symbol: "KO", assetClass: "stock" }),
+          lot({ symbol: "ko", assetClass: "cedear", quantity: "10" }),
+          lot({ symbol: "KO", assetClass: "stock", quantity: "0" }),
+        ],
+        prices({}),
+      );
+
+      expect(metrics.positions.map((p) => `${p.assetClass}:${p.symbol}:${p.lots.length}`)).toEqual([
+        "cedear:KO:1",
+        "stock:KO:1",
+      ]);
+    });
+
+    it("no calcula costo promedio si ningún lote tiene costo base", () => {
+      const metrics = computePortfolioMetrics([lot({ costBasis: null })], prices({ "crypto:BTC": "1" }));
+      expect(metrics.positions[0]).toMatchObject({ averageCost: null, unrealizedGain: null, value: "1" });
+    });
+  });
 });

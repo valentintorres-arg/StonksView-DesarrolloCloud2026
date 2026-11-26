@@ -23,6 +23,7 @@ import {
   dec,
   type Decimal,
   type DecimalInput,
+  divide,
   isZero,
   mul,
   percent,
@@ -93,6 +94,39 @@ export interface ConcentrationRisk {
   symbolsOverThreshold: SymbolBreakdown[];
 }
 
+// Valuación de un lote, para la pantalla de tenencias (P4).
+export interface LotValuation {
+  id: string;
+  sourceName: string;
+  quantity: string;
+  costBasis: string | null;
+  // null si el activo no tiene precio.
+  value: string | null;
+  // Valor menos costo (cantidad × costo por unidad + comisión). null sin
+  // precio o sin costo base.
+  unrealizedGain: string | null;
+}
+
+// Posición: todos los lotes vigentes de un mismo símbolo y clase, sumados.
+export interface Position {
+  symbol: string;
+  assetClass: string;
+  quantity: string;
+  price: string | null;
+  value: string | null;
+  sharePercent: string | null;
+  // Promedio del costo por unidad ponderado por cantidad, sobre los lotes con
+  // costo base. Solo para mostrar: los lotes nunca se promedian (RN-10).
+  averageCost: string | null;
+  // Suma de la ganancia de los lotes con costo base; null si no hay precio o
+  // ningún lote tiene costo.
+  unrealizedGain: string | null;
+  unrealizedGainPercent: string | null;
+  // Cantidad de sedes distintas donde está el activo.
+  sources: number;
+  lots: LotValuation[];
+}
+
 export interface PortfolioMetrics {
   totalValue: string;
   valuedLots: number;
@@ -102,6 +136,8 @@ export interface PortfolioMetrics {
   bySymbol: SymbolBreakdown[];
   unrealizedGain: UnrealizedGain;
   concentration: ConcentrationRisk;
+  // Mayor valor primero; las posiciones sin precio van al final.
+  positions: Position[];
 }
 
 interface Group {
@@ -240,7 +276,97 @@ export function computePortfolioMetrics(
       sourcesOverThreshold: overThreshold(bySource),
       symbolsOverThreshold: overThreshold(bySymbol),
     },
+    positions: computePositions(holdings, priceOf, share),
   };
+}
+
+// Dígitos del costo promedio: alcanza para cripto con precios chicos.
+const AVERAGE_COST_DIGITS = 8;
+
+function computePositions(
+  holdings: readonly HoldingLot[],
+  priceOf: PriceLookup,
+  share: (value: Decimal) => string | null,
+): Position[] {
+  const groups = new Map<string, { symbol: string; assetClass: string; lots: HoldingLot[] }>();
+  for (const lot of holdings) {
+    if (isZero(dec(lot.quantity))) continue;
+    const symbol = lot.symbol.toUpperCase();
+    const key = `${lot.assetClass}:${symbol}`;
+    const group = groups.get(key) ?? { symbol, assetClass: lot.assetClass, lots: [] };
+    group.lots.push(lot);
+    groups.set(key, group);
+  }
+
+  const positions = [...groups.values()].map(({ symbol, assetClass, lots }) => {
+    const priceInput = priceOf(symbol, assetClass);
+    const price = priceInput === undefined ? null : dec(priceInput);
+
+    let quantity = ZERO;
+    let value = ZERO;
+    let costedQuantity = ZERO;
+    let costedUnits = ZERO; // Σ cantidad × costo por unidad, sin comisión
+    let gain = ZERO;
+    let gainCost = ZERO; // Σ costo con comisión de los lotes con costo
+    let lotsWithCost = 0;
+
+    const valuations = lots.map((lot): LotValuation => {
+      const q = dec(lot.quantity);
+      quantity = add(quantity, q);
+      const lotValue = price === null ? null : mul(q, price);
+      if (lotValue) value = add(value, lotValue);
+
+      let lotGain: Decimal | null = null;
+      if (lot.costBasis !== null) {
+        const units = mul(q, lot.costBasis);
+        costedQuantity = add(costedQuantity, q);
+        costedUnits = add(costedUnits, units);
+        lotsWithCost += 1;
+        if (lotValue) {
+          const cost = add(units, lot.fee ?? ZERO);
+          lotGain = sub(lotValue, cost);
+          gain = add(gain, lotGain);
+          gainCost = add(gainCost, cost);
+        }
+      }
+
+      return {
+        id: lot.id,
+        sourceName: lot.sourceName.trim(),
+        quantity: toString(q),
+        costBasis: lot.costBasis === null ? null : toString(lot.costBasis),
+        value: lotValue && toString(lotValue),
+        unrealizedGain: lotGain && toString(lotGain),
+      };
+    });
+
+    const averageCost = lotsWithCost > 0 ? divide(costedUnits, costedQuantity, AVERAGE_COST_DIGITS) : null;
+    const hasGain = price !== null && lotsWithCost > 0;
+    return {
+      symbol,
+      assetClass,
+      quantity: toString(quantity),
+      price: price && toString(price),
+      value: price === null ? null : toString(value),
+      sharePercent: price === null ? null : share(value),
+      averageCost: averageCost && toString(averageCost),
+      unrealizedGain: hasGain ? toString(gain) : null,
+      unrealizedGainPercent: hasGain ? formatPercent(percent(gain, gainCost)) : null,
+      sources: new Set(lots.map((lot) => normalizeSource(lot.sourceName))).size,
+      lots: valuations,
+      sortValue: price === null ? null : value,
+    };
+  });
+
+  return positions
+    .sort(
+      (a, b) =>
+        (a.sortValue === null ? 1 : 0) - (b.sortValue === null ? 1 : 0) ||
+        (a.sortValue && b.sortValue ? compare(b.sortValue, a.sortValue) : 0) ||
+        a.symbol.localeCompare(b.symbol) ||
+        a.assetClass.localeCompare(b.assetClass),
+    )
+    .map(({ sortValue: _sortValue, ...position }) => position);
 }
 
 function normalizeSource(name: string): string {
