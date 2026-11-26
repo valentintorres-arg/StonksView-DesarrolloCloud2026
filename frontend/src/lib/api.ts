@@ -11,6 +11,31 @@ export interface Portfolio {
   createdAt: string;
 }
 
+export type AssetClass = "crypto" | "stock" | "etf" | "cedear" | "forex" | "other";
+export type SourceType = "exchange" | "wallet" | "broker" | "other";
+
+// Un lote. Montos como string decimal exacto; fechas ISO 8601.
+export interface Holding {
+  id: string;
+  portfolioId: string;
+  symbol: string;
+  assetClass: AssetClass;
+  quantity: string;
+  costBasis: string | null;
+  fee: string | null;
+  sourceType: SourceType;
+  sourceName: string;
+  acquiredAt: string | null;
+  lockupExpiry: string | null;
+  ratio: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type NewHolding = Pick<Holding, "symbol" | "assetClass" | "quantity" | "sourceType" | "sourceName"> &
+  Partial<Pick<Holding, "costBasis" | "fee" | "acquiredAt" | "lockupExpiry" | "ratio" | "notes">>;
+
 export interface Breakdown {
   value: string;
   sharePercent: string | null;
@@ -106,5 +131,12 @@ export const api = {
   listPortfolios: () => request<Portfolio[]>("/portfolios"),
   createPortfolio: (name: string, baseCurrency = "USD") =>
     request<Portfolio>("/portfolios", { method: "POST", body: JSON.stringify({ name, baseCurrency }) }),
+  listHoldings: (portfolioId: string) =>
+    request<Holding[]>(`/portfolios/${encodeURIComponent(portfolioId)}/holdings`),
+  createHolding: (portfolioId: string, holding: NewHolding) =>
+    request<Holding>(`/portfolios/${encodeURIComponent(portfolioId)}/holdings`, {
+      method: "POST",
+      body: JSON.stringify(holding),
+    }),
   dashboard: (portfolioId: string) => request<Dashboard>(`/portfolios/${encodeURIComponent(portfolioId)}/metrics`),
 };
