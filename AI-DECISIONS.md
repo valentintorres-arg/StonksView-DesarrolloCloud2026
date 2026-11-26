@@ -209,6 +209,22 @@ Este archivo documenta el razonamiento técnico detrás de cada fragmento de có
 
 ---
 
+## 26/11/2026 — Pantalla de alta de tenencias (tarea 3.2, issue #27)
+- **Problema abordado:** El backend ya tenía `POST /portfolios/{id}/holdings`, pero desde la app no había forma de cargar una tenencia: el dashboard quedaba vacío para cualquier usuario nuevo. La spec funcional define la pantalla P5 (campos, validaciones y ayudas) y las reglas RN-04 a RN-07.
+- **Prompt / Herramienta utilizada:** Claude Code. Primero se le pidió comparar la spec funcional con lo implementado y después arrancar por la pantalla de alta de tenencias.
+- **Código / Arquitectura generada:** Ruta `/tenencias/nueva` con `components/holding-form.tsx`. La validación vive aparte en `lib/holding-form.ts`, sin React: acepta decimales con coma o punto (`1.234,5` → `"1234.5"`) y los manda como string exacto, normaliza el símbolo (RN-06), pide ratio solo para CEDEAR y no deja fechas de adquisición futuras. La sede se autocompleta con las ya usadas y, si coincide sin distinguir mayúsculas ni espacios, se guarda con el nombre y el tipo de la primera carga (RN-07). Errores por campo con `aria-describedby`, foco en el primero con error y detalle de los 400 de la API. Al guardar, "Cargar otra" conserva la sede. Se agregó el botón "Nueva tenencia" en el header y el estado vacío del dashboard (P2). Para no duplicar código se movieron `useLoad`, los estados de carga y error y el header a módulos compartidos.
+- **Validación y Corrección Humana:** Lint, typecheck y build del export estático pasan. No había `.env` con credenciales en la máquina, así que se probó en el navegador con una API simulada y una sesión falsa: se revisó el JSON que llegaba a la API (sede `binance ` → `Binance`, tipo heredado, decimales exactos), la validación vacía, el ratio obligatorio en CEDEAR, el error 400 de la API y el ancho de celular. La prueba encontró dos errores, que se corrigieron: el foco iba al primer campo según el orden en que se validaban y no según el orden en pantalla (con CEDEAR saltaba a la comisión, que estaba plegada), y el header se partía en dos líneas en el celular. Se apartó de la spec en un punto: P5 dice volver a la pantalla de tenencias (P4), que todavía no existe, así que el mensaje de éxito queda en la misma pantalla. Quedan pendientes la edición de lotes (va con P4) y el movimiento `buy` al dar de alta (RN-08), que es del backend. Falta probarlo contra Supabase real.
+
+---
+
+## 26/11/2026 — RN-07 en el alta de holdings (fix)
+- **Problema abordado:** `POST /portfolios/{id}/holdings` guardaba la sede tal como venía. Así, "Binance" y " binance" quedaban como dos sedes distintas en el dashboard y en las transferencias, aunque RN-07 dice que son la misma y `transfer_holding` ya las trata así.
+- **Prompt / Herramienta utilizada:** Claude Code. El cambio salió en un PR del alta de holdings (#65) que se cerró a favor de #64, que resuelve la misma pantalla en el frontend; se pidió conservar la parte de backend en un PR aparte.
+- **Código / Arquitectura generada:** `createHolding` lista los lotes del portfolio (incluidos los agotados) y, si alguno tiene la misma sede sin distinguir mayúsculas ni espacios de los costados, guarda el nombre con el que se cargó primero (igual que `transfer_holding`). Si es una sede nueva, la guarda sin espacios en los costados.
+- **Validación y Corrección Humana:** Se eligió el lote más antiguo por `created_at` e `id`, el mismo criterio de `transfer_holding`, para que las dos operaciones resuelvan igual el nombre. Si el portfolio es ajeno, RLS devuelve la lista vacía y el insert sigue respondiendo 404 como antes. Tests nuevos: reutiliza "Binance" cuando se escribe "  BINANCE ", y una sede nueva se guarda sin espacios en los costados. Backend: 177/177.
+
+---
+
 ## 26/11/2026 — Endpoint de insight con IA (Groq) (tarea 4.2, issue #32)
 - **Problema abordado:** Faltaba el insight en lenguaje natural de RN-31 a RN-36: a pedido del usuario, interpretar las métricas ya calculadas sin que la IA invente números, con límite diario, timeout corto y degradación a `no_disponible` sin romper el dashboard.
 - **Prompt / Herramienta utilizada:** Claude Code, pidiéndole tomar las tareas de Bautista que estuvieran desbloqueadas. La tarea estaba sugerida a otro integrante y no tenía trabajo empezado.
