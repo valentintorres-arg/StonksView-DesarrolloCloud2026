@@ -29,3 +29,107 @@ UTN Facultad Regional La Plata
 | CI/CD y observabilidad | GitHub Actions (CI en cada PR, deploy al mergear a `main`); logs en CloudWatch y `GET /health` verificado después de cada deploy | El deploy queda automatizado y se detecta enseguida si rompió la conexión con la base. |
 
 Los Planes B (Vercel para frontend y backend, GitHub Actions schedule o Vercel Cron para las alertas) y el detalle de cada decisión están en `StonksView_Arquitectura.md` y en `plan a seguir.md`.
+
+## Desarrollo local
+
+En local, la app se conecta al **proyecto de Supabase del equipo** (la misma base que usa el deploy). No hace falta pedirle a nadie la URL ni la clave: están guardadas como **variables del repo en GitHub**, y un script las baja y arma los archivos de entorno.
+
+### Cómo está armado
+
+| Valor | Dónde está en GitHub | Lo puede leer | Para qué |
+|---|---|---|---|
+| `SUPABASE_URL` | Variable del repo | Cualquiera con acceso al repo | API local, frontend y deploy |
+| `SUPABASE_ANON_KEY` | Variable del repo | Cualquiera con acceso al repo | API local, frontend y deploy. Es la *publishable key* de Supabase (`sb_publishable_...`): pública por diseño, lo que protege los datos es RLS |
+| `SUPABASE_SERVICE_ROLE_KEY` | Secret del environment `production` | Solo los workflows de Actions | Deploy: escribir `price_cache` |
+| `DATABASE_URL`, `GROQ_API_KEY` | Canal seguro del equipo | Quien la necesite | Migraciones con Prisma e insights con IA |
+
+Las variables se ven en GitHub en **Settings → Secrets and variables → Actions → Variables**. Los *secrets* de GitHub, en cambio, no se pueden leer fuera de Actions: por eso lo secreto no entra en el script.
+
+### Requisitos
+
+- Node 22 o superior y pnpm (`npm install -g pnpm`).
+- La CLI de GitHub ([cli.github.com](https://cli.github.com/)), logueada con una cuenta que tenga acceso al repo:
+
+  ```bash
+  gh auth login
+  gh auth status   # tiene que mostrar tu usuario
+  ```
+
+### Paso a paso
+
+Todos los comandos se corren desde la raíz del repo.
+
+1. **Instalar dependencias** (una sola vez, y cada vez que cambie un `package.json`):
+
+   ```bash
+   cd backend && npm ci && cd ..
+   cd frontend && pnpm install && cd ..
+   ```
+
+2. **Generar los archivos de entorno:**
+
+   ```bash
+   node scripts/setup-env.mjs
+   ```
+
+   Lee `SUPABASE_URL` y `SUPABASE_ANON_KEY` del repo con `gh` y escribe:
+
+   - `.env` en la raíz: `SUPABASE_URL` y `SUPABASE_ANON_KEY`, para la API local.
+   - `frontend/.env.local`: las mismas con prefijo `NEXT_PUBLIC_`, más `NEXT_PUBLIC_API_URL=http://localhost:3001`.
+
+   Los dos archivos están en `.gitignore`. Si ya existen, el script reemplaza solo esas claves y deja el resto (por ejemplo, un `DATABASE_URL` agregado a mano), así que se puede volver a correr cuando cambie una variable.
+
+3. **Levantar la API local** (puerto 3001), en una terminal:
+
+   ```bash
+   cd backend
+   npm run dev
+   ```
+
+   Abrí `http://localhost:3001/health`: tiene que responder `200` con `"database":"ok"`. Si da `503`, la API no llega a Supabase (ver *Problemas comunes*).
+
+4. **Levantar el frontend** (puerto 3000), en otra terminal:
+
+   ```bash
+   cd frontend
+   pnpm dev
+   ```
+
+   Abrí `http://localhost:3000`: redirige a la pantalla de inicio de sesión.
+
+5. **Crear tu usuario** desde *Registrate*. El proyecto tiene activada la confirmación de email: antes de iniciar sesión hay que abrir el mail de Supabase y confirmar la cuenta.
+
+### Problemas comunes
+
+| Síntoma | Causa y solución |
+|---|---|
+| `variable SUPABASE_URL was not found` | Las variables no están cargadas en el repo, o `gh` apunta a otro repo. Revisá con `gh variable list` desde la raíz del repo. |
+| `failed to run git: not a git repository` | El script se corrió fuera del repo. Corrélo desde la raíz. |
+| `gh: command not found` / `no se encontró el comando gh` | Falta instalar la CLI de GitHub, o abrir una terminal nueva después de instalarla. |
+| `/health` responde `503` | Falta el `.env` en la raíz o tiene valores viejos. Volvé a correr el script y reiniciá `npm run dev`. |
+| El frontend muestra "This page couldn't load" | Falta `frontend/.env.local`. Corré el script y reiniciá `pnpm dev` (Next lee el archivo al arrancar). |
+| No puedo iniciar sesión después de registrarme | Falta confirmar el email. |
+
+Sin `SUPABASE_SERVICE_ROLE_KEY` en el `.env`, la app funciona igual pero no guarda en cache los precios que trae de CoinGecko y Yahoo.
+
+### Cargar o cambiar las variables (mantenimiento)
+
+Solo hace falta si se rota una clave o se cambia de proyecto de Supabase. Los valores están en el dashboard de Supabase, en **Project Settings → API Keys**:
+
+```bash
+gh variable set SUPABASE_URL --body "https://<ref>.supabase.co"
+gh variable set SUPABASE_ANON_KEY --body "sb_publishable_..."
+```
+
+La *secret key* (`sb_secret_...`) nunca va como variable: es un secret y se carga con `gh secret set SUPABASE_SERVICE_ROLE_KEY --env production` (pide el valor sin dejarlo en el historial). Después de cambiar una variable, cada integrante vuelve a correr `node scripts/setup-env.mjs`.
+
+### Tests
+
+Los tests del backend no usan Supabase: corren contra un Postgres en memoria (PGlite) con las migraciones de `prisma/migrations`.
+
+```bash
+cd backend
+npm test
+```
+
+En Windows, si algún archivo falla con `Worker exited unexpectedly`, es falta de memoria al correr en paralelo: `npx vitest run --no-file-parallelism` los corre de a uno.
