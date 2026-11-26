@@ -1,8 +1,9 @@
 // Métricas del dashboard consolidado (tarea 3.3, issue #28).
 //
 // Junta las tenencias actuales del portfolio, el último precio cacheado de
-// cada activo (price_cache, que llena la tarea 4.4) y el motor de métricas
-// determinístico. El backend calcula; el frontend solo muestra.
+// cada activo (price_cache, que se refresca acá mismo si venció: ver
+// core/prices) y el motor de métricas determinístico. El backend calcula; el
+// frontend solo muestra.
 //
 // Precios: de cada (símbolo, clase de activo) se usa el más reciente entre
 // las fuentes, y solo si está en la moneda base del portfolio. Un precio en
@@ -10,6 +11,7 @@
 // como "sin precio", igual que si no hubiera precio.
 
 import { z } from "zod";
+import type { Asset } from "./prices";
 import { computePortfolioMetrics, type HoldingLot, type PortfolioMetrics } from "./metrics";
 import type { PortfolioStore, StoreResult } from "./portfolios";
 import { internalError, invalidRequest, mapRpcError, type Outcome } from "./rpc";
@@ -21,6 +23,7 @@ export interface PriceRow {
   price: string;
   currency: string;
   fetched_at: string;
+  change_percent_24h?: string | null;
 }
 
 export interface PriceStore {
@@ -60,6 +63,8 @@ export async function getDashboard(
   store: PortfolioStore,
   prices: PriceStore,
   onError: (error: unknown) => void,
+  // Trae de las APIs los precios vencidos; sin él se usa solo el cache.
+  refresh?: (assets: Asset[], cached: PriceRow[]) => Promise<PriceRow[]>,
 ): Promise<Outcome<DashboardResult>> {
   const parsed = querySchema.safeParse(input);
   if (!parsed.success) return invalidRequest("El pedido de métricas no es válido", parsed.error);
@@ -78,7 +83,9 @@ export async function getDashboard(
     const cached = symbols.length ? await prices.pricesFor(symbols) : { data: [], error: null };
     if (cached.error) return mapRpcError(cached.error, MESSAGES, onError);
 
-    const latest = latestPrices(cached.data, currency);
+    const assets = holdings.data.map((h) => ({ symbol: h.symbol, assetClass: h.asset_class }));
+    const rows = refresh && assets.length ? await refresh(assets, cached.data) : cached.data;
+    const latest = latestPrices(rows, currency);
 
     const lots: HoldingLot[] = holdings.data.map((h) => ({
       id: h.id,
