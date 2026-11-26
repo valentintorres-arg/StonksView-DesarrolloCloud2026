@@ -47,3 +47,11 @@ export function dateTime(iso: string): string {
 
 export const sourceTypeLabel = (type: string) => SOURCE_TYPES[type] ?? type;
 export const assetClassLabel = (assetClass: string) => ASSET_CLASSES[assetClass] ?? assetClass;
+
+// Opciones de los selectores, en el orden en que se muestran. Los valores son
+// los que admite el CHECK de la base.
+export const SOURCE_TYPE_OPTIONS = Object.entries(SOURCE_TYPES).map(([value, label]) => ({ value, label }));
+export const ASSET_CLASS_OPTIONS = ["crypto", "stock", "etf", "cedear", "forex", "other"].map((value) => ({
+  value,
+  label: ASSET_CLASSES[value]!,
+}));
