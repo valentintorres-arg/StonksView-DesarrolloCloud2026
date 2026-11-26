@@ -4,8 +4,9 @@
 // Cada envío crea un lote: una compra concreta en una sede.
 
 import Link from "next/link";
-import { useId, useState, type FormEvent, type ReactNode } from "react";
-import { ErrorBox, Status } from "@/components/feedback";
+import { useId, useState, type FormEvent } from "react";
+import { Field } from "@/components/form-field";
+import { PortfolioGate } from "@/components/portfolio-gate";
 import { api, ApiError, type Holding, type Portfolio } from "@/lib/api";
 import { ASSET_CLASS_OPTIONS, SOURCE_TYPE_OPTIONS, money, sourceTypeLabel } from "@/lib/format";
 import {
@@ -21,25 +22,6 @@ import {
 import { errorMessage, useLoad } from "@/lib/use-load";
 
 export function NewHoldingScreen() {
-  const [portfolios, , reload] = useLoad(api.listPortfolios, []);
-  const [chosen, setChosen] = useState<string | null>(null);
-
-  if (portfolios.state === "loading") return <Status>Cargando portfolios…</Status>;
-  if (portfolios.state === "error") return <ErrorBox message={portfolios.message} onRetry={reload} />;
-
-  if (portfolios.data.length === 0) {
-    return (
-      <div className="mx-auto mt-16 max-w-sm px-6 text-center">
-        <p className="text-sm text-neutral-500">Antes de cargar tenencias necesitás un portfolio.</p>
-        <Link href="/" className="mt-3 inline-block font-semibold text-emerald-700 hover:underline dark:text-emerald-400">
-          Crear mi portfolio
-        </Link>
-      </div>
-    );
-  }
-
-  const portfolio = portfolios.data.find((p) => p.id === chosen) ?? portfolios.data[0]!;
-
   return (
     <div className="mx-auto w-full max-w-2xl px-6 py-8">
       <Link href="/" className="text-sm text-neutral-500 hover:underline">
@@ -49,25 +31,7 @@ export function NewHoldingScreen() {
       <p className="mt-1 text-sm text-neutral-500">
         Cargá una compra concreta: qué activo, cuánto, a qué precio y en qué sede está.
       </p>
-
-      {portfolios.data.length > 1 && (
-        <label className="mt-6 flex items-center gap-3 text-sm">
-          <span className="text-neutral-500">Portfolio</span>
-          <select
-            value={portfolio.id}
-            onChange={(e) => setChosen(e.target.value)}
-            className="rounded-md border border-neutral-300 bg-transparent px-3 py-1.5 dark:border-neutral-700"
-          >
-            {portfolios.data.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-
-      <PortfolioHoldingForm key={portfolio.id} portfolio={portfolio} />
+      <PortfolioGate>{(portfolio) => <PortfolioHoldingForm key={portfolio.id} portfolio={portfolio} />}</PortfolioGate>
     </div>
   );
 }
@@ -315,60 +279,6 @@ function PortfolioHoldingForm({ portfolio }: { portfolio: Portfolio }) {
         </Link>
       </div>
     </form>
-  );
-}
-
-const INPUT_CLASS =
-  "mt-1 w-full rounded-md border bg-transparent px-3 py-2 text-sm outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600/20 disabled:opacity-60";
-
-interface ControlProps {
-  id: string;
-  className: string;
-  "aria-invalid"?: boolean;
-  "aria-describedby"?: string;
-}
-
-// Etiqueta, ayuda y error de un campo, conectados al control por id y
-// aria-describedby para los lectores de pantalla.
-function Field({
-  id,
-  label,
-  optional,
-  hint,
-  error,
-  children,
-}: {
-  id: string;
-  label: string;
-  optional?: boolean;
-  hint?: string;
-  error?: string;
-  children: (props: ControlProps) => ReactNode;
-}) {
-  const controlId = `holding-${id}`;
-  const describedBy = [error && `${controlId}-error`, hint && `${controlId}-hint`].filter(Boolean).join(" ");
-  return (
-    <div>
-      <label htmlFor={controlId} className="block text-sm font-medium">
-        {label} {optional && <span className="font-normal text-neutral-500">(opcional)</span>}
-      </label>
-      {children({
-        id: controlId,
-        className: `${INPUT_CLASS} ${error ? "border-red-500 dark:border-red-400" : "border-neutral-300 dark:border-neutral-700"}`,
-        ...(error ? { "aria-invalid": true } : {}),
-        ...(describedBy ? { "aria-describedby": describedBy } : {}),
-      })}
-      {error && (
-        <p id={`${controlId}-error`} className="mt-1 text-xs text-red-700 dark:text-red-300">
-          {error}
-        </p>
-      )}
-      {hint && (
-        <p id={`${controlId}-hint`} className="mt-1 text-xs text-neutral-500">
-          {hint}
-        </p>
-      )}
-    </div>
   );
 }
 
