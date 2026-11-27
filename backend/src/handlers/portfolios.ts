@@ -16,6 +16,7 @@ import {
 } from "../core/portfolios";
 import type { Outcome } from "../core/rpc";
 import { json } from "./http";
+import { withRequestLog } from "./observability";
 import { supabasePortfolioStore, supabasePriceStore } from "./portfolio-store";
 import { defaultPriceRefreshDeps, priceRefresher, type PriceRefreshDeps } from "./price-refresh";
 import { NO_STORE, readAuthenticatedJson } from "./request";
@@ -88,7 +89,9 @@ export function createHandler(storesFor: StoreFactory): APIGatewayProxyHandlerV2
 // Fuera del handler: se reutilizan entre invocaciones del mismo contenedor.
 const priceDeps = defaultPriceRefreshDeps();
 
-export const handler = createHandler((token) => {
-  const client = supabaseForUser(token);
-  return { portfolios: supabasePortfolioStore(client), prices: supabasePriceStore(client), ...priceDeps };
-});
+export const handler = withRequestLog(
+  createHandler((token) => {
+    const client = supabaseForUser(token);
+    return { portfolios: supabasePortfolioStore(client), prices: supabasePriceStore(client), ...priceDeps };
+  }),
+);

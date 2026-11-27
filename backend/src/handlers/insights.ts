@@ -7,6 +7,7 @@ import { generateInsight, type InsightStore, latestInsight, type Llm } from "../
 import type { Outcome } from "../core/rpc";
 import { groqFromEnv } from "./groq";
 import { json } from "./http";
+import { withRequestLog } from "./observability";
 import { supabaseInsightStore } from "./insight-store";
 import { supabasePortfolioStore, supabasePriceStore } from "./portfolio-store";
 import { defaultPriceRefreshDeps, priceRefresher } from "./price-refresh";
@@ -54,12 +55,14 @@ export function createHandler(storesFor: (token: string) => InsightStores, llm: 
 // Fuera del handler: se reutilizan entre invocaciones del mismo contenedor.
 const priceDeps = defaultPriceRefreshDeps();
 
-export const handler = createHandler((token) => {
-  const client = supabaseForUser(token);
-  return {
-    portfolios: supabasePortfolioStore(client),
-    prices: supabasePriceStore(client),
-    ...priceDeps,
-    insights: supabaseInsightStore(client),
-  };
-}, groqFromEnv());
+export const handler = withRequestLog(
+  createHandler((token) => {
+    const client = supabaseForUser(token);
+    return {
+      portfolios: supabasePortfolioStore(client),
+      prices: supabasePriceStore(client),
+      ...priceDeps,
+      insights: supabaseInsightStore(client),
+    };
+  }, groqFromEnv()),
+);

@@ -35,6 +35,15 @@ Parameters:
     Type: String
     Default: llama-3.3-70b-versatile
     Description: Modelo de Groq para el insight (GROQ_MODEL).
+  AlarmEmail:
+    Type: String
+    Default: ""
+    Description: >-
+      Email que recibe la alarma de errores de la API (opcional). Vacío: la alarma se ve en
+      la consola de CloudWatch pero no notifica.
+
+Conditions:
+  HasAlarmEmail: !Not [!Equals [!Ref AlarmEmail, ""]]
 
 Globals:
   Function:
@@ -44,6 +53,10 @@ Globals:
     MemorySize: 256
     Timeout: 10
     CodeUri: backend/
+    # Logs en JSON (tarea 2.4): lo que se loguea como objeto queda como
+    # campos consultables en Logs Insights, y Lambda agrega su requestId.
+    LoggingConfig:
+      LogFormat: JSON
     Environment:
       Variables:
         NODE_OPTIONS: --enable-source-maps
@@ -304,7 +317,118 @@ Resources:
       LogGroupName: !Sub /aws/lambda/${InsightsFunction}
       RetentionInDays: 14
 
+  # ---------- Observabilidad (tarea 2.4) ----------
+
+  # Alarma: 3 o más respuestas 5xx de la API en 5 minutos. Sin tráfico no
+  # dispara (TreatMissingData: notBreaching).
+  ApiErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${AWS::StackName}-api-5xx
+      AlarmDescription: La API respondió 3 o más errores 5xx en 5 minutos. Buscar el detalle en el dashboard o en Logs Insights (message.status >= 500).
+      Namespace: AWS/ApiGateway
+      MetricName: 5xx
+      Dimensions:
+        - Name: ApiId
+          Value: !Ref HttpApi
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 3
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: !If [HasAlarmEmail, [!Ref AlarmTopic], !Ref AWS::NoValue]
+      OKActions: !If [HasAlarmEmail, [!Ref AlarmTopic], !Ref AWS::NoValue]
+
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Condition: HasAlarmEmail
+    Properties:
+      TopicName: !Sub ${AWS::StackName}-alarms
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref AlarmEmail
+
+  ApiDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub ${AWS::StackName}-api
+      DashboardBody: !Sub
+        - |
+          {
+            "widgets": [
+              {
+                "type": "metric", "x": 0, "y": 0, "width": 12, "height": 6,
+                "properties": {
+                  "title": "Requests y errores de la API",
+                  "region": "${AWS::Region}", "view": "timeSeries", "stat": "Sum", "period": 300,
+                  "metrics": [
+                    ["AWS/ApiGateway", "Count", "ApiId", "${HttpApi}", {"label": "Requests"}],
+                    [".", "4xx", ".", ".", {"label": "4xx"}],
+                    [".", "5xx", ".", ".", {"label": "5xx"}]
+                  ]
+                }
+              },
+              {
+                "type": "metric", "x": 12, "y": 0, "width": 12, "height": 6,
+                "properties": {
+                  "title": "Latencia de la API (ms)",
+                  "region": "${AWS::Region}", "view": "timeSeries", "period": 300,
+                  "metrics": [
+                    ["AWS/ApiGateway", "Latency", "ApiId", "${HttpApi}", {"stat": "p50", "label": "p50"}],
+                    ["...", {"stat": "p95", "label": "p95"}],
+                    ["...", {"stat": "Maximum", "label": "máxima"}]
+                  ]
+                }
+              },
+              {
+                "type": "metric", "x": 0, "y": 6, "width": 12, "height": 6,
+                "properties": {
+                  "title": "Errores por Lambda",
+                  "region": "${AWS::Region}", "view": "timeSeries", "stat": "Sum", "period": 300,
+                  "metrics": [
+                    ["AWS/Lambda", "Errors", "FunctionName", "${PortfoliosFunction}", {"label": "portfolios"}],
+                    ["...", "${TransfersFunction}", {"label": "transfers"}],
+                    ["...", "${SalesFunction}", {"label": "sales"}],
+                    ["...", "${HealthFunction}", {"label": "health"}],
+                    ["...", "${InsightsFunction}", {"label": "insights"}]
+                  ]
+                }
+              },
+              {
+                "type": "metric", "x": 12, "y": 6, "width": 12, "height": 6,
+                "properties": {
+                  "title": "Duración p95 por Lambda (ms)",
+                  "region": "${AWS::Region}", "view": "timeSeries", "stat": "p95", "period": 300,
+                  "metrics": [
+                    ["AWS/Lambda", "Duration", "FunctionName", "${PortfoliosFunction}", {"label": "portfolios"}],
+                    ["...", "${TransfersFunction}", {"label": "transfers"}],
+                    ["...", "${SalesFunction}", {"label": "sales"}],
+                    ["...", "${HealthFunction}", {"label": "health"}],
+                    ["...", "${InsightsFunction}", {"label": "insights"}]
+                  ]
+                }
+              },
+              {
+                "type": "log", "x": 0, "y": 12, "width": 24, "height": 8,
+                "properties": {
+                  "title": "Últimos requests (id, ruta, status y latencia)",
+                  "region": "${AWS::Region}", "view": "table",
+                  "query": "SOURCE '${PortfoliosLogs}' | SOURCE '${TransfersLogs}' | SOURCE '${SalesLogs}' | SOURCE '${HealthLogs}' | SOURCE '${InsightsLogs}' | fields @timestamp, message.apiRequestId as requestId, message.route as ruta, message.status as status, message.latencyMs as latenciaMs, message.error as error | filter message.msg = 'request' | sort @timestamp desc | limit 50"
+                }
+              }
+            ]
+          }
+        - PortfoliosLogs: !Ref PortfoliosFunctionLogGroup
+          TransfersLogs: !Ref TransfersFunctionLogGroup
+          SalesLogs: !Ref SalesFunctionLogGroup
+          HealthLogs: !Ref HealthFunctionLogGroup
+          InsightsLogs: !Ref InsightsFunctionLogGroup
+
 Outputs:
   ApiUrl:
     Description: URL base de la API
     Value: !Sub https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com
+  DashboardUrl:
+    Description: Dashboard de CloudWatch de la API
+    Value: !Sub https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards/dashboard/${ApiDashboard}

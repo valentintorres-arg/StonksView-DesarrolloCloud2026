@@ -3,5 +3,6 @@
 import type { APIGatewayProxyHandlerV2 } from "aws-lambda";
 import { ping } from "../core/ping";
 import { json } from "./http";
+import { withRequestLog } from "./observability";
 
-export const handler: APIGatewayProxyHandlerV2 = async () => json(200, ping());
+export const handler: APIGatewayProxyHandlerV2 = withRequestLog(async () => json(200, ping()));

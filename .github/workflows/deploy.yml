@@ -11,6 +11,12 @@ name: Deploy
 # portfolios la usa solo para escribir price_cache (tarea 4.4).
 # GROQ_API_KEY también va como secret de production: solo la recibe la Lambda
 # del insight (tarea 4.2).
+# Observabilidad (tarea 2.4): el stack crea la alarma stonksview-api-5xx y el
+# dashboard stonksview-api; la policy necesita cloudwatch:PutMetricAlarm,
+# DeleteAlarms, DescribeAlarms, PutDashboard, GetDashboard y DeleteDashboards
+# sobre esos recursos. La variable ALARM_EMAIL es opcional: si está, crea el
+# topic SNS stonksview-alarms (sns:CreateTopic, DeleteTopic, Subscribe,
+# GetTopicAttributes, SetTopicAttributes y Unsubscribe sobre stonksview-*).
 # No se usa OIDC porque la SCP del plan free de AWS bloquea crear el identity provider.
 # El nombre del stack de SAM tiene que empezar con "stonksview" para que la policy aplique.
 #
@@ -53,7 +59,8 @@ jobs:
               "SupabaseUrl=${{ vars.SUPABASE_URL }}" \
               "SupabaseAnonKey=${{ vars.SUPABASE_ANON_KEY }}" \
               "SupabaseServiceRoleKey=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-              "GroqApiKey=${{ secrets.GROQ_API_KEY }}"
+              "GroqApiKey=${{ secrets.GROQ_API_KEY }}" \
+              "AlarmEmail=${{ vars.ALARM_EMAIL }}"
 
       # Frontend: export estático a S3 + invalidación de CloudFront (tarea 3.5)
       - uses: pnpm/action-setup@v4
