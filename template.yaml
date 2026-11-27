@@ -22,8 +22,19 @@ Parameters:
     NoEcho: true
     Default: ""
     Description: >-
-      Clave service_role de Supabase (SUPABASE_SERVICE_ROLE_KEY). SECRETA. Solo la recibe
-      PortfoliosFunction, para escribir price_cache. Vacía: los precios se usan sin cachearse.
+      Clave service_role de Supabase (SUPABASE_SERVICE_ROLE_KEY). SECRETA. Solo la reciben
+      PortfoliosFunction e InsightsFunction, para escribir price_cache. Vacía: los precios se usan sin cachearse.
+  GroqApiKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: >-
+      API key de Groq (GROQ_API_KEY). SECRETA. Solo la recibe InsightsFunction. Vacía: el
+      insight responde no_disponible.
+  GroqModel:
+    Type: String
+    Default: llama-3.3-70b-versatile
+    Description: Modelo de Groq para el insight (GROQ_MODEL).
   AlarmEmail:
     Type: String
     Default: ""
@@ -262,6 +273,50 @@ Resources:
       LogGroupName: !Sub /aws/lambda/${PortfoliosFunction}
       RetentionInDays: 14
 
+  # Insight con IA (tarea 4.2). Función aparte: la llamada a Groq tiene un
+  # timeout de 10 s y la Lambda necesita margen para valuar y guardar.
+  InsightsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: insights.handler
+      Timeout: 20
+      Environment:
+        Variables:
+          GROQ_API_KEY: !Ref GroqApiKey
+          GROQ_MODEL: !Ref GroqModel
+          SUPABASE_SERVICE_ROLE_KEY: !Ref SupabaseServiceRoleKey
+      Events:
+        GenerateInsight:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /portfolios/{portfolioId}/insights
+            Method: POST
+        LatestInsight:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /portfolios/{portfolioId}/insights/latest
+            Method: GET
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - src/handlers/insights.ts
+        Format: esm
+        OutExtension:
+          - .js=.mjs
+        Target: es2022
+        Minify: true
+        Sourcemap: true
+        UseNpmCi: true
+
+  InsightsFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${InsightsFunction}
+      RetentionInDays: 14
+
   # ---------- Observabilidad (tarea 2.4) ----------
 
   # Alarma: 3 o más respuestas 5xx de la API en 5 minutos. Sin tráfico no
@@ -335,7 +390,8 @@ Resources:
                     ["AWS/Lambda", "Errors", "FunctionName", "${PortfoliosFunction}", {"label": "portfolios"}],
                     ["...", "${TransfersFunction}", {"label": "transfers"}],
                     ["...", "${SalesFunction}", {"label": "sales"}],
-                    ["...", "${HealthFunction}", {"label": "health"}]
+                    ["...", "${HealthFunction}", {"label": "health"}],
+                    ["...", "${InsightsFunction}", {"label": "insights"}]
                   ]
                 }
               },
@@ -348,7 +404,8 @@ Resources:
                     ["AWS/Lambda", "Duration", "FunctionName", "${PortfoliosFunction}", {"label": "portfolios"}],
                     ["...", "${TransfersFunction}", {"label": "transfers"}],
                     ["...", "${SalesFunction}", {"label": "sales"}],
-                    ["...", "${HealthFunction}", {"label": "health"}]
+                    ["...", "${HealthFunction}", {"label": "health"}],
+                    ["...", "${InsightsFunction}", {"label": "insights"}]
                   ]
                 }
               },
@@ -357,7 +414,7 @@ Resources:
                 "properties": {
                   "title": "Últimos requests (id, ruta, status y latencia)",
                   "region": "${AWS::Region}", "view": "table",
-                  "query": "SOURCE '${PortfoliosLogs}' | SOURCE '${TransfersLogs}' | SOURCE '${SalesLogs}' | SOURCE '${HealthLogs}' | fields @timestamp, message.apiRequestId as requestId, message.route as ruta, message.status as status, message.latencyMs as latenciaMs, message.error as error | filter message.msg = 'request' | sort @timestamp desc | limit 50"
+                  "query": "SOURCE '${PortfoliosLogs}' | SOURCE '${TransfersLogs}' | SOURCE '${SalesLogs}' | SOURCE '${HealthLogs}' | SOURCE '${InsightsLogs}' | fields @timestamp, message.apiRequestId as requestId, message.route as ruta, message.status as status, message.latencyMs as latenciaMs, message.error as error | filter message.msg = 'request' | sort @timestamp desc | limit 50"
                 }
               }
             ]
@@ -366,6 +423,7 @@ Resources:
           TransfersLogs: !Ref TransfersFunctionLogGroup
           SalesLogs: !Ref SalesFunctionLogGroup
           HealthLogs: !Ref HealthFunctionLogGroup
+          InsightsLogs: !Ref InsightsFunctionLogGroup
 
 Outputs:
   ApiUrl:

@@ -134,6 +134,28 @@ describe("holdings", () => {
     });
   });
 
+  it("reutiliza el nombre de una sede existente sin distinguir mayúsculas ni espacios (RN-07)", async () => {
+    const s = store({
+      listHoldings: vi.fn(async () => ({
+        data: [
+          { ...holdingRow, id: "b", source_name: "binance ", created_at: "2026-05-01T00:00:00Z" },
+          { ...holdingRow, id: "a", source_name: "Binance", created_at: "2026-02-01T00:00:00Z" },
+        ],
+        error: null,
+      })),
+    });
+
+    expect((await createHolding(P, { ...valid, sourceName: "  BINANCE " }, s, noop)).status).toBe(201);
+    expect(s.listHoldings).toHaveBeenCalledWith(P, true);
+    expect(s.createHolding).toHaveBeenCalledWith(expect.objectContaining({ source_name: "Binance" }));
+  });
+
+  it("una sede nueva se guarda tal como se escribió (sin espacios en los costados)", async () => {
+    const s = store({ listHoldings: vi.fn(async () => ({ data: [], error: null })) });
+    await createHolding(P, { ...valid, sourceName: " Ledger Nano " }, s, noop);
+    expect(s.createHolding).toHaveBeenCalledWith(expect.objectContaining({ source_name: "Ledger Nano" }));
+  });
+
   it("acepta un holding sin costo base (se valúa pero no entra en la ganancia)", async () => {
     const s = store();
     const { costBasis: _omit, ...withoutCost } = valid;

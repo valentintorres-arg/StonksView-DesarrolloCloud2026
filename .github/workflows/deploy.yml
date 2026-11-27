@@ -9,6 +9,8 @@ name: Deploy
 # AWS_ACCESS_KEY_ID y AWS_SECRET_ACCESS_KEY del environment production.
 # SUPABASE_SERVICE_ROLE_KEY también va como secret de production: la Lambda de
 # portfolios la usa solo para escribir price_cache (tarea 4.4).
+# GROQ_API_KEY también va como secret de production: solo la recibe la Lambda
+# del insight (tarea 4.2).
 # Observabilidad (tarea 2.4): el stack crea la alarma stonksview-api-5xx y el
 # dashboard stonksview-api; la policy necesita cloudwatch:PutMetricAlarm,
 # DeleteAlarms, DescribeAlarms, PutDashboard, GetDashboard y DeleteDashboards
@@ -57,6 +59,7 @@ jobs:
               "SupabaseUrl=${{ vars.SUPABASE_URL }}" \
               "SupabaseAnonKey=${{ vars.SUPABASE_ANON_KEY }}" \
               "SupabaseServiceRoleKey=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+              "GroqApiKey=${{ secrets.GROQ_API_KEY }}" \
               "AlarmEmail=${{ vars.ALARM_EMAIL }}"
 
       # Frontend: export estático a S3 + invalidación de CloudFront (tarea 3.5)
