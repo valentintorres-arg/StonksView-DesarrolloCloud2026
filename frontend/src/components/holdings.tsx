@@ -43,7 +43,10 @@ async function loadData(portfolioId: string): Promise<Data> {
 function PortfolioHoldings({ portfolio }: { portfolio: Portfolio }) {
   const [data, , reload] = useLoad(() => loadData(portfolio.id), [portfolio.id]);
   // Lote recién cargado o editado, que llega por la URL para resaltarlo.
-  const highlighted = useSearchParams().get("lote");
+  const params = useSearchParams();
+  const highlighted = params.get("lote");
+  // Si se llegó desde una transferencia, el lote resaltado es el de destino.
+  const transferred = params.get("transferencia") === "1";
   const [showSaved, setShowSaved] = useState(true);
   const [source, setSource] = useState("");
   const [assetClass, setAssetClass] = useState("");
@@ -90,7 +93,7 @@ function PortfolioHoldings({ portfolio }: { portfolio: Portfolio }) {
     <>
       {showSaved && highlighted && holdings.has(highlighted) && (
         <p role="status" className="mt-4 rounded-md bg-emerald-50 px-4 py-2 text-sm text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300">
-          Tenencia guardada.
+          {transferred ? "Transferencia registrada." : "Tenencia guardada."}
         </p>
       )}
 
@@ -417,6 +420,13 @@ function LotRow({
             </span>
           ) : (
             <span className="inline-flex items-center gap-3">
+              <Link
+                href={`/tenencias/transferir/?id=${encodeURIComponent(lot.id)}`}
+                className="font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+                aria-label={`Transferir el lote de ${symbol} en ${lot.sourceName} a otra sede`}
+              >
+                Transferir
+              </Link>
               <Link
                 href={`/tenencias/editar/?id=${encodeURIComponent(lot.id)}`}
                 className="font-medium text-emerald-700 hover:underline dark:text-emerald-400"
