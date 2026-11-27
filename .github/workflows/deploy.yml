@@ -1,8 +1,18 @@
 name: Deploy
 
 # CD hacia AWS (Plan A). Queda deshabilitado hasta que existan los recursos:
-# definir la variable de repositorio AWS_DEPLOY_ENABLED=true cuando estén listos
-# (bucket de S3, distribución de CloudFront y template SAM).
+# definir la variable de repositorio AWS_DEPLOY_ENABLED=true cuando estén listos.
+# Checklist completo en readme.md -> "Deploy a AWS".
+#
+# Variables (repo o environment production):
+#   SUPABASE_URL, SUPABASE_ANON_KEY  -> Lambdas y build del frontend
+#   S3_BUCKET                        -> bucket del frontend (stonksview-*)
+#   CLOUDFRONT_DISTRIBUTION_ID       -> distribución que sirve ese bucket
+#   FRONTEND_URL                     -> URL pública del frontend (https://xxxx.cloudfront.net),
+#                                       único origen que acepta el CORS de la API
+#   ALARM_EMAIL (opcional)           -> email de la alarma de errores
+# La URL de la API no es una variable: se lee del output ApiUrl del stack
+# después de `sam deploy`, así el primer deploy no depende de cargarla a mano.
 #
 # Credenciales: el usuario IAM github-actions-deploy (policy StonksViewGitHubDeploy,
 # acotada a recursos stonksview-* en us-east-2). Sus access keys van como secrets
@@ -17,6 +27,11 @@ name: Deploy
 # sobre esos recursos. La variable ALARM_EMAIL es opcional: si está, crea el
 # topic SNS stonksview-alarms (sns:CreateTopic, DeleteTopic, Subscribe,
 # GetTopicAttributes, SetTopicAttributes y Unsubscribe sobre stonksview-*).
+# Artefactos de SAM: en lugar de --resolve-s3 (que crea el stack y el bucket
+# aws-sam-cli-managed-default, fuera del prefijo que permite la policy) se usa
+# el bucket stonksview-sam-artifacts-<cuenta>-<región>, que el job crea si no
+# existe (s3:CreateBucket, PutBucketPublicAccessBlock, ListBucket, PutObject y
+# GetObject sobre stonksview-*).
 # No se usa OIDC porque la SCP del plan free de AWS bloquea crear el identity provider.
 # El nombre del stack de SAM tiene que empezar con "stonksview" para que la policy aplique.
 #
@@ -40,8 +55,34 @@ jobs:
     if: ${{ vars.AWS_DEPLOY_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     environment: production
+    env:
+      STACK_NAME: stonksview
     steps:
       - uses: actions/checkout@v4
+
+      # Falla temprano y con un mensaje claro si falta algo, en lugar de
+      # desplegar a medias (por ejemplo, una API con CORS vacío).
+      - name: Check required variables
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+          S3_BUCKET: ${{ vars.S3_BUCKET }}
+          CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
+          FRONTEND_URL: ${{ vars.FRONTEND_URL }}
+        run: |
+          missing=0
+          for name in SUPABASE_URL SUPABASE_ANON_KEY S3_BUCKET CLOUDFRONT_DISTRIBUTION_ID FRONTEND_URL; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Falta la variable $name (Settings -> Secrets and variables -> Actions -> Variables)"
+              missing=1
+            fi
+          done
+          case "$FRONTEND_URL" in
+            https://*) ;;
+            "") ;;
+            *) echo "::error::FRONTEND_URL tiene que empezar con https:// (por ejemplo https://xxxx.cloudfront.net)"; missing=1 ;;
+          esac
+          exit $missing
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -51,16 +92,43 @@ jobs:
 
       # Backend: Lambdas + API Gateway + EventBridge (tarea 1.6)
       - uses: aws-actions/setup-sam@v2
+      - name: Prepare SAM artifacts bucket
+        id: artifacts
+        run: |
+          account=$(aws sts get-caller-identity --query Account --output text)
+          bucket="stonksview-sam-artifacts-${account}-${AWS_REGION}"
+          if ! aws s3api head-bucket --bucket "$bucket" 2>/dev/null; then
+            aws s3api create-bucket --bucket "$bucket" \
+              --create-bucket-configuration "LocationConstraint=${AWS_REGION}"
+            aws s3api put-public-access-block --bucket "$bucket" \
+              --public-access-block-configuration \
+                BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+          fi
+          echo "bucket=$bucket" >> "$GITHUB_OUTPUT"
       - name: Build and deploy backend
         run: |
           sam build
           sam deploy --no-confirm-changeset --no-fail-on-empty-changeset \
+            --stack-name "$STACK_NAME" \
+            --s3-bucket "${{ steps.artifacts.outputs.bucket }}" --s3-prefix "$STACK_NAME" \
             --parameter-overrides \
+              "AllowedOrigins=${{ vars.FRONTEND_URL }}" \
               "SupabaseUrl=${{ vars.SUPABASE_URL }}" \
               "SupabaseAnonKey=${{ vars.SUPABASE_ANON_KEY }}" \
               "SupabaseServiceRoleKey=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
               "GroqApiKey=${{ secrets.GROQ_API_KEY }}" \
               "AlarmEmail=${{ vars.ALARM_EMAIL }}"
+      - name: Read API URL from the stack
+        id: api
+        run: |
+          url=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" \
+            --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text)
+          if [ -z "$url" ] || [ "$url" = "None" ]; then
+            echo "::error::El stack $STACK_NAME no devolvió el output ApiUrl"
+            exit 1
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "API: $url" >> "$GITHUB_STEP_SUMMARY"
 
       # Frontend: export estático a S3 + invalidación de CloudFront (tarea 3.5)
       - uses: pnpm/action-setup@v4
@@ -77,7 +145,7 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm build
         env:
-          NEXT_PUBLIC_API_URL: ${{ vars.API_URL }}
+          NEXT_PUBLIC_API_URL: ${{ steps.api.outputs.url }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
       - name: Publish to S3 and invalidate CloudFront
@@ -87,4 +155,6 @@ jobs:
 
       # Verificación post-deploy (tarea 1.9)
       - name: Health check
-        run: curl --fail --retry 5 --retry-delay 5 "${{ vars.API_URL }}/health"
+        run: |
+          curl --fail --retry 5 --retry-delay 5 "${{ steps.api.outputs.url }}/health"
+          echo "Frontend: ${{ vars.FRONTEND_URL }}" >> "$GITHUB_STEP_SUMMARY"

@@ -133,3 +133,45 @@ npm test
 ```
 
 En Windows, si algún archivo falla con `Worker exited unexpectedly`, es falta de memoria al correr en paralelo: `npx vitest run --no-file-parallelism` los corre de a uno.
+
+## Deploy a AWS
+
+Cada merge a `main` corre el workflow `Deploy` (`.github/workflows/deploy.yml`): despliega el backend con SAM (API Gateway + Lambdas en `us-east-2`), arma el frontend como export estático, lo sube a S3, invalida CloudFront y verifica `GET /health`. Está apagado hasta que `AWS_DEPLOY_ENABLED` valga `true`.
+
+### Checklist para el primer deploy
+
+**1. En AWS** (consola, con un usuario que no sea el de deploy):
+
+- Bucket S3 privado para el frontend, con nombre `stonksview-*` (la policy de deploy solo permite ese prefijo).
+- Distribución de CloudFront con ese bucket como origen (Origin Access Control, bucket sin acceso público).
+- La CloudFront Function de `infra/cloudfront/rewrite-index.js` asociada a la distribución en *viewer request* (runtime `cloudfront-js-2.0`). Sin ella, recargar en `/login` da error.
+- Permisos de la policy `StonksViewGitHubDeploy`: además de lo que ya tiene, el job crea el bucket de artefactos de SAM `stonksview-sam-artifacts-<cuenta>-us-east-2` (`s3:CreateBucket`, `s3:PutBucketPublicAccessBlock`, `s3:ListBucket`, `s3:PutObject`, `s3:GetObject`) y necesita los permisos de CloudWatch y SNS que lista el comentario de `deploy.yml`.
+
+**2. En GitHub** (variables del repo):
+
+```bash
+gh variable set S3_BUCKET --body "stonksview-..."
+gh variable set CLOUDFRONT_DISTRIBUTION_ID --body "E..."
+gh variable set FRONTEND_URL --body "https://xxxx.cloudfront.net"   # sin barra final
+```
+
+`FRONTEND_URL` es el único origen que acepta el CORS de la API desplegada: si no coincide exacto con la URL del navegador, todos los pedidos del frontend fallan. `SUPABASE_URL` y `SUPABASE_ANON_KEY` ya están cargadas (ver *Desarrollo local*). La URL de la API no se carga: el workflow la lee del stack después de desplegar.
+
+Secrets del environment `production` (opcionales para el primer deploy):
+
+```bash
+gh secret set SUPABASE_SERVICE_ROLE_KEY --env production   # sin ella, no se cachean precios
+gh secret set GROQ_API_KEY --env production                # sin ella, el insight responde no_disponible
+```
+
+**3. En Supabase:** Authentication → URL Configuration → *Site URL* y *Redirect URLs* con la `FRONTEND_URL`. Si no, el mail de confirmación del registro lleva a `localhost`.
+
+**4. Encender y lanzar:**
+
+```bash
+gh variable set AWS_DEPLOY_ENABLED --body "true"
+gh workflow run Deploy
+gh run watch
+```
+
+El resumen del run muestra la URL de la API y la del frontend. Si un paso falla con `AccessDenied`, el mensaje dice qué acción y qué recurso faltan en la policy.
