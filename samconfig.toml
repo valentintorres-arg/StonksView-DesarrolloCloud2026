@@ -13,5 +13,9 @@ lint = true
 
 [default.deploy.parameters]
 capabilities = "CAPABILITY_IAM"
-resolve_s3 = true
+# Sin resolve_s3: crearía el stack y el bucket aws-sam-cli-managed-default,
+# fuera del prefijo stonksview-* que permite la policy de deploy. El workflow
+# pasa --s3-bucket stonksview-sam-artifacts-<cuenta>-<región>; para un deploy
+# manual, pasar el mismo bucket con --s3-bucket.
+s3_prefix = "stonksview"
 confirm_changeset = true
