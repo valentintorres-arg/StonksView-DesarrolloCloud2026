@@ -5,6 +5,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { APIGatewayProxyHandlerV2 } from "aws-lambda";
 import { checkHealth, type DatabaseProbe } from "../core/health";
 import { json } from "./http";
+import { withRequestLog } from "./observability";
 
 // Se crea una vez por contenedor y se reutiliza entre invocaciones.
 let client: SupabaseClient | undefined;
@@ -45,4 +46,4 @@ export function createHandler(probe: DatabaseProbe): APIGatewayProxyHandlerV2 {
   };
 }
 
-export const handler = createHandler(supabaseProbe);
+export const handler = withRequestLog(createHandler(supabaseProbe));
