@@ -78,7 +78,10 @@ function PortfolioMetrics({ portfolioId }: { portfolioId: string }) {
           {portfolio.name}
         </h1>
         <p className="text-xs text-neutral-500">
-          {pricesAsOf ? `Precios al ${dateTime(pricesAsOf)}` : "Sin precios cargados"}
+          {pricesAsOf ? `Precios al ${dateTime(pricesAsOf)}` : "Sin precios cargados"} ·{" "}
+          <Link href="/tenencias/" className="font-medium text-emerald-700 hover:underline dark:text-emerald-400">
+            Ver tenencias
+          </Link>
         </p>
       </div>
 

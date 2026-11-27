@@ -67,6 +67,33 @@ export interface SymbolBreakdown extends Breakdown {
   assetClass: string;
 }
 
+export interface LotValuation {
+  id: string;
+  sourceName: string;
+  quantity: string;
+  costBasis: string | null;
+  value: string | null;
+  unrealizedGain: string | null;
+}
+
+// Todos los lotes de un símbolo y clase, valuados por el backend.
+export interface Position {
+  symbol: string;
+  assetClass: string;
+  quantity: string;
+  price: string | null;
+  value: string | null;
+  sharePercent: string | null;
+  averageCost: string | null;
+  unrealizedGain: string | null;
+  unrealizedGainPercent: string | null;
+  sources: number;
+  lots: LotValuation[];
+}
+
+// Campos de un lote que se pueden cambiar (PATCH /holdings/{id}).
+export type HoldingPatch = Partial<Pick<NewHolding, "costBasis" | "fee" | "acquiredAt" | "lockupExpiry" | "ratio" | "notes">>;
+
 export interface Dashboard {
   portfolio: { id: string; name: string; baseCurrency: string };
   metrics: {
@@ -90,6 +117,7 @@ export interface Dashboard {
       sourcesOverThreshold: SourceBreakdown[];
       symbolsOverThreshold: SymbolBreakdown[];
     };
+    positions: Position[];
   };
   prices: Array<{ symbol: string; assetClass: string; price: string; source: string; fetchedAt: string }>;
   pricesAsOf: string | null;
@@ -153,5 +181,9 @@ export const api = {
       method: "POST",
       body: JSON.stringify(holding),
     }),
+  updateHolding: (holdingId: string, patch: HoldingPatch) =>
+    request<Holding>(`/holdings/${encodeURIComponent(holdingId)}`, { method: "PATCH", body: JSON.stringify(patch) }),
+  deleteHolding: (holdingId: string) =>
+    request<void>(`/holdings/${encodeURIComponent(holdingId)}`, { method: "DELETE" }),
   dashboard: (portfolioId: string) => request<Dashboard>(`/portfolios/${encodeURIComponent(portfolioId)}/metrics`),
 };

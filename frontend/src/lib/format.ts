@@ -55,3 +55,16 @@ export const ASSET_CLASS_OPTIONS = ["crypto", "stock", "etf", "cedear", "forex",
   value,
   label: ASSET_CLASSES[value]!,
 }));
+
+// Cantidades de activos: hasta 8 decimales (cripto), sin ceros de más.
+export function quantity(value: string): string {
+  return new Intl.NumberFormat("es-AR", { maximumFractionDigits: 8 }).format(Number(value));
+}
+
+// Fecha de un timestamptz guardado a partir de un <input type="date">. Se
+// toma la parte de la fecha tal cual: convertirla a hora local la correría un
+// día hacia atrás en Argentina (medianoche UTC son las 21 h del día anterior).
+export function day(iso: string): string {
+  const [year, month, date] = iso.slice(0, 10).split("-");
+  return `${date}/${month}/${year}`;
+}

@@ -2,7 +2,7 @@
 // barrera, para avisar campo por campo antes de llamar a la API; la API vuelve
 // a validar todo con zod y la base con sus CHECK.
 
-import type { Holding, NewHolding } from "./api";
+import type { Holding, HoldingPatch, NewHolding } from "./api";
 
 export interface HoldingFormValues {
   symbol: string;
@@ -143,4 +143,73 @@ export function validateHoldingForm(
       notes: values.notes.trim() || null,
     },
   };
+}
+
+// ---------- Edición ----------
+
+// La API deja cambiar solo estos campos de un lote; símbolo, cantidad y sede
+// se corrigen con una venta o una transferencia (RN-09).
+export interface HoldingEditValues {
+  costBasis: string;
+  acquiredAt: string;
+  fee: string;
+  ratio: string;
+  lockupExpiry: string;
+  notes: string;
+}
+
+export type HoldingEditErrors = Partial<Record<keyof HoldingEditValues, string>>;
+
+export function editValuesFrom(holding: Holding): HoldingEditValues {
+  const dateOnly = (iso: string | null) => (iso ? iso.slice(0, 10) : "");
+  return {
+    costBasis: holding.costBasis ?? "",
+    acquiredAt: dateOnly(holding.acquiredAt),
+    fee: holding.fee ?? "",
+    ratio: holding.ratio ?? "",
+    lockupExpiry: dateOnly(holding.lockupExpiry),
+    notes: holding.notes ?? "",
+  };
+}
+
+export type HoldingEditResult = { ok: true; patch: HoldingPatch } | { ok: false; errors: HoldingEditErrors };
+
+// Valida y arma el PATCH con los campos que cambiaron. Vaciar un campo
+// opcional lo borra (se manda null).
+export function validateHoldingEdit(
+  values: HoldingEditValues,
+  holding: Holding,
+  today = todayIso(),
+): HoldingEditResult {
+  const errors: HoldingEditErrors = {};
+  const original = editValuesFrom(holding);
+
+  const decimalField = (field: "costBasis" | "fee" | "ratio", label: string, positive = false) => {
+    const raw = values[field].trim();
+    if (!raw) return null;
+    const parsed = parseDecimal(raw);
+    if (parsed === null || (positive && isZero(parsed))) {
+      errors[field] = positive ? `${label} tiene que ser un número mayor a 0.` : `${label} tiene que ser un número mayor o igual a 0.`;
+    }
+    return parsed;
+  };
+  const costBasis = decimalField("costBasis", "El costo por unidad");
+  const fee = decimalField("fee", "La comisión");
+  const ratio = decimalField("ratio", "El ratio", true);
+  if (holding.assetClass === "cedear" && !values.ratio.trim()) errors.ratio = "Ingresá el ratio del CEDEAR.";
+
+  if (values.acquiredAt && values.acquiredAt > today) {
+    errors.acquiredAt = "La fecha de adquisición no puede ser futura.";
+  }
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+
+  const sameDecimal = (a: string | null, b: string) => (a ?? "") === (b ? parseDecimal(b) ?? b : "");
+  const patch: HoldingPatch = {};
+  if (!sameDecimal(costBasis, original.costBasis)) patch.costBasis = costBasis;
+  if (!sameDecimal(fee, original.fee)) patch.fee = fee;
+  if (!sameDecimal(ratio, original.ratio)) patch.ratio = ratio;
+  if (values.acquiredAt !== original.acquiredAt) patch.acquiredAt = values.acquiredAt || null;
+  if (values.lockupExpiry !== original.lockupExpiry) patch.lockupExpiry = values.lockupExpiry || null;
+  if (values.notes.trim() !== original.notes) patch.notes = values.notes.trim() || null;
+  return { ok: true, patch };
 }
