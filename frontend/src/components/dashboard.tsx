@@ -9,6 +9,7 @@ import { useState, type FormEvent } from "react";
 import { api, type Dashboard as DashboardData, type Portfolio } from "@/lib/api";
 import { assetClassLabel, dateTime, money, percent, signedMoney, sourceTypeLabel } from "@/lib/format";
 import { ErrorBox, Status } from "@/components/feedback";
+import { InsightCard } from "@/components/insight-card";
 import { errorMessage, useLoad } from "@/lib/use-load";
 
 export function Dashboard() {
@@ -110,6 +111,8 @@ function PortfolioMetrics({ portfolioId }: { portfolioId: string }) {
           Más del {metrics.concentration.thresholdPercent} % del patrimonio está en {concentrated.join(" y en ")}.
         </Notice>
       )}
+
+      <InsightCard portfolioId={portfolio.id} />
 
       <div className="mt-8 grid gap-8 lg:grid-cols-2">
         <ShareBars

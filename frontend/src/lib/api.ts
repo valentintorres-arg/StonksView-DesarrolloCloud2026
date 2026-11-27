@@ -142,6 +142,15 @@ export interface TransferResult {
   relocated: boolean;
 }
 
+// Insight con IA (tarea 4.2). `text` es null cuando no está disponible.
+export interface Insight {
+  id: string | null;
+  portfolioId: string;
+  state: "ok" | "no_disponible";
+  text: string | null;
+  createdAt: string;
+}
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -207,4 +216,8 @@ export const api = {
   createTransfer: (transfer: TransferRequest) =>
     request<TransferResult>("/transfers", { method: "POST", body: JSON.stringify(transfer) }),
   dashboard: (portfolioId: string) => request<Dashboard>(`/portfolios/${encodeURIComponent(portfolioId)}/metrics`),
+  latestInsight: (portfolioId: string) =>
+    request<Insight | null>(`/portfolios/${encodeURIComponent(portfolioId)}/insights/latest`),
+  generateInsight: (portfolioId: string) =>
+    request<Insight>(`/portfolios/${encodeURIComponent(portfolioId)}/insights`, { method: "POST" }),
 };
