@@ -123,6 +123,25 @@ export interface Dashboard {
   pricesAsOf: string | null;
 }
 
+// Transferencia interna entre sedes propias (POST /transfers, tarea 1.8).
+export interface TransferRequest {
+  fromHoldingId: string;
+  quantity: string;
+  toSourceName: string;
+  toSourceType?: string;
+}
+
+export interface TransferResult {
+  transferId: string;
+  fromHoldingId: string;
+  toHoldingId: string;
+  quantity: string;
+  // Se sumó a un lote idéntico que ya existía en la sede destino.
+  merged: boolean;
+  // Se movió el lote entero (mismo id, otra sede).
+  relocated: boolean;
+}
+
 // Insight con IA (tarea 4.2). `text` es null cuando no está disponible.
 export interface Insight {
   id: string | null;
@@ -194,6 +213,8 @@ export const api = {
     request<Holding>(`/holdings/${encodeURIComponent(holdingId)}`, { method: "PATCH", body: JSON.stringify(patch) }),
   deleteHolding: (holdingId: string) =>
     request<void>(`/holdings/${encodeURIComponent(holdingId)}`, { method: "DELETE" }),
+  createTransfer: (transfer: TransferRequest) =>
+    request<TransferResult>("/transfers", { method: "POST", body: JSON.stringify(transfer) }),
   dashboard: (portfolioId: string) => request<Dashboard>(`/portfolios/${encodeURIComponent(portfolioId)}/metrics`),
   latestInsight: (portfolioId: string) =>
     request<Insight | null>(`/portfolios/${encodeURIComponent(portfolioId)}/insights/latest`),
