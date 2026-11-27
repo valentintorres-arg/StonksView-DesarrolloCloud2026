@@ -89,6 +89,7 @@ Plan de trabajo del equipo, organizado por fases. Cada tarea tiene su issue en G
 | 4.5 | Alertas de precio y Web Push: Lambda de chequeo idempotente invocada por EventBridge Scheduler y envío con `web-push` (Plan B3: GitHub Actions schedule o Vercel Cron) | Valentín | 1.6, 4.4 | Una alerta cumplida dispara la notificación y marca `triggered_at` | #35 |
 | 4.6 | Prueba de resiliencia: simular la falla del LLM y mostrar que el dashboard sigue funcionando | Bautista | 4.2 | Evidencia lista para la defensa | #36 |
 | 4.7 | *(Opcional)* Importación de tenencias por CSV: subida vía S3 y alta masiva de holdings | — | 1.7 | Se importa un CSV de ejemplo | #37 |
+| 4.8 | Vista de mercado: endpoint (por ejemplo `GET /market`) que reutiliza los proveedores de precios y `price_cache`, y pantalla con precio, moneda, variación 24 h y hora de actualización de cripto y acciones, aunque el usuario no las tenga | — | 4.4 | Se ven los precios actuales de cripto y acciones, y una caída de CoinGecko o Yahoo no rompe la pantalla | #75 |
 
 ## Transversales
 
