@@ -12,6 +12,9 @@
 // - Un lote no cambia de sede, símbolo ni cantidad por PATCH: para eso están
 //   POST /transfers, POST /sales o borrar y volver a cargar.
 // - No se puede borrar un lote que aparece en una transferencia (FK): 409.
+// - Las sedes se comparan sin mayúsculas ni espacios de los costados (RN-07):
+//   si ya hay un lote en " binance", el alta en "Binance" reutiliza el nombre
+//   tal como se cargó la primera vez, igual que transfer_holding.
 
 import { z } from "zod";
 import { decimalString, internalError, invalidRequest, mapRpcError, type Outcome, type RpcError } from "./rpc";
@@ -236,6 +239,14 @@ export async function createHolding(
   if (!parsed.success) return invalidRequest("El holding no es válido", parsed.error);
 
   const h = parsed.data;
+
+  // Un portfolio ajeno devuelve una lista vacía (RLS) y el insert de abajo
+  // termina en 404.
+  const existing = await safe(() => store.listHoldings(parsedId.data, true), onError);
+  if (!existing) return internalError(HOLDING_MESSAGES.internal);
+  if (existing.error) return mapRpcError(existing.error, HOLDING_MESSAGES, onError);
+  const sourceName = existingSourceName(existing.data, h.sourceName) ?? h.sourceName;
+
   const result = await safe(
     () =>
       store.createHolding({
@@ -246,7 +257,7 @@ export async function createHolding(
         cost_basis: h.costBasis ?? null,
         fee: h.fee ?? null,
         source_type: h.sourceType,
-        source_name: h.sourceName,
+        source_name: sourceName,
         acquired_at: h.acquiredAt ?? null,
         lockup_expiry: h.lockupExpiry ?? null,
         ratio: h.ratio ?? null,
@@ -308,6 +319,17 @@ export async function deleteHolding(
   if (!result.data) return notFound(HOLDING_MESSAGES.notFound);
   return { status: 204, body: null };
 }
+
+// Nombre con el que se cargó primero la misma sede, si ya existe.
+function existingSourceName(holdings: HoldingRow[], name: string): string | null {
+  const key = sourceKey(name);
+  const match = [...holdings]
+    .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))
+    .find((h) => sourceKey(h.source_name) === key);
+  return match?.source_name ?? null;
+}
+
+const sourceKey = (name: string) => name.trim().toLowerCase();
 
 function notFound(message: string): Outcome<never> {
   return { status: 404, body: { error: "not_found", message } };

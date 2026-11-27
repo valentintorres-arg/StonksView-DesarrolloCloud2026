@@ -2,6 +2,7 @@
 // handler. Hay un test que verifica que coincidan con el template.
 
 import { handler as health } from "../handlers/health";
+import { handler as insights } from "../handlers/insights";
 import { handler as ping } from "../handlers/ping";
 import { handler as portfolios } from "../handlers/portfolios";
 import { handler as sales } from "../handlers/sales";
@@ -20,4 +21,6 @@ export const ROUTES: Route[] = [
   { method: "GET", path: "/portfolios/{portfolioId}/metrics", handler: portfolios },
   { method: "PATCH", path: "/holdings/{holdingId}", handler: portfolios },
   { method: "DELETE", path: "/holdings/{holdingId}", handler: portfolios },
+  { method: "POST", path: "/portfolios/{portfolioId}/insights", handler: insights },
+  { method: "GET", path: "/portfolios/{portfolioId}/insights/latest", handler: insights },
 ];
