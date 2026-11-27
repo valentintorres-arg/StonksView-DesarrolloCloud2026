@@ -8,11 +8,18 @@ export const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 export const DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile";
 export const LLM_TIMEOUT_MS = 10_000;
 
-export function groqLlm(apiKey: string, model = DEFAULT_GROQ_MODEL, fetchImpl: typeof fetch = fetch): Llm {
+export function groqLlm(
+  apiKey: string,
+  model = DEFAULT_GROQ_MODEL,
+  fetchImpl: typeof fetch = fetch,
+  // Solo para los tests de resiliencia (tarea 4.6): simular un Groq colgado
+  // sin esperar los 10 s reales.
+  timeoutMs = LLM_TIMEOUT_MS,
+): Llm {
   return async (messages: ChatMessage[]) => {
     const response = await fetchImpl(GROQ_URL, {
       method: "POST",
-      signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
       headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
       body: JSON.stringify({ model, messages, temperature: 0.2, max_tokens: 300 }),
     });

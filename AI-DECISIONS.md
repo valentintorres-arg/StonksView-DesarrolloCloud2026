@@ -249,6 +249,14 @@ Este archivo documenta el razonamiento técnico detrás de cada fragmento de có
 
 ---
 
+## 27/11/2026 — Prueba de resiliencia con el LLM caído (tarea 4.6, issue #36)
+- **Problema abordado:** Para la defensa hacía falta mostrar que, si la IA falla, el insight degrada a `no_disponible` y el dashboard sigue funcionando (RN-34). Los tests de #32 cubrían la lógica con un LLM falso, pero no el cliente real de Groq ni los dos endpoints juntos.
+- **Prompt / Herramienta utilizada:** Claude Code, pidiéndole seguir con las issues que se desbloquearan después de mergear #66. La tarea estaba sugerida a otro integrante y no tenía trabajo empezado.
+- **Código / Arquitectura generada:** `resilience.test.ts` ejecuta los handlers reales de insight y de métricas con el cliente real de Groq y un `fetch` simulado. Tiene un caso de control y ocho fallas: sin API key, sin red, timeout, 500, 503, key inválida, respuesta vacía y número inventado. En cada falla verifica que el insight responde 201 `no_disponible`, que no tarda más que el timeout, que queda guardado para auditar y que el dashboard responde 200 con los mismos números. `groqLlm` acepta un timeout opcional para simular el cuelgue sin esperar 10 s. `docs/resiliencia-llm.md` junta la evidencia (tabla de casos y salida real del test) y el guion de la demo en vivo.
+- **Validación y Corrección Humana:** Se descartó agregar una variable para apuntar el cliente a otra URL y "tirar" Groq en la demo: en producción permitiría mandar la API key a cualquier host si se configura mal. Por eso la demo en vivo usa una key inválida o cortar la red, que no necesitan código nuevo. El caso del timeout mide el tiempo: tarda 51 ms con un timeout de 50 ms, lo que confirma que el pedido se corta apenas vence. Backend: 222/222. La demo en el navegador depende de la tarjeta del insight (#33, en otro PR) y no se ejecutó.
+
+---
+
 ## 27/11/2026 — Tarjeta del insight en el dashboard (tarea 4.3, issue #33)
 - **Problema abordado:** El endpoint del insight (#32) ya estaba en main, pero el dashboard no lo mostraba ni dejaba pedirlo.
 - **Prompt / Herramienta utilizada:** Claude Code, pidiéndole seguir con las issues que se desbloquearan después de mergear #66.
