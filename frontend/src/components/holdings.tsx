@@ -18,7 +18,15 @@ import { errorMessage, useLoad } from "@/lib/use-load";
 export function HoldingsScreen() {
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6">
-      <h1 className="text-2xl font-bold">Tenencias</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold">Tenencias</h1>
+        <Link
+          href="/tenencias/importar/"
+          className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-900"
+        >
+          Importar CSV
+        </Link>
+      </div>
       <PortfolioGate>{(portfolio) => <PortfolioHoldings key={portfolio.id} portfolio={portfolio} />}</PortfolioGate>
     </div>
   );
