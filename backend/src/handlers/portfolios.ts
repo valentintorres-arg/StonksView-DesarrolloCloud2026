@@ -15,6 +15,7 @@ import {
   updateHolding,
 } from "../core/portfolios";
 import type { Outcome } from "../core/rpc";
+import { type CsvImportStore, importHoldingsCsv } from "../core/csv-import";
 import { json } from "./http";
 import { withRequestLog } from "./observability";
 import { supabasePortfolioStore, supabasePriceStore } from "./portfolio-store";
@@ -24,7 +25,7 @@ import { supabaseForUser } from "./supabase";
 
 // El refresco de precios vencidos (tarea 4.4) es opcional para los tests.
 export interface Stores extends PriceRefreshDeps {
-  portfolios: PortfolioStore;
+  portfolios: PortfolioStore & Partial<CsvImportStore>;
   prices: PriceStore;
 }
 
@@ -68,6 +69,8 @@ function dispatch(event: APIGatewayProxyEventV2, body: unknown, stores: Stores):
       return updateHolding(params.holdingId, body, store, onError);
     case "DELETE /holdings/{holdingId}":
       return deleteHolding(params.holdingId, store, onError);
+    case "POST /portfolios/{portfolioId}/holdings/import":
+      return importHoldingsCsv(params.portfolioId, body, store as CsvImportStore, onError);
     default:
       return Promise.resolve({ status: 404, body: { error: "not_found", message: "Ruta inexistente" } });
   }

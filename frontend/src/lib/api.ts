@@ -151,12 +151,25 @@ export interface Insight {
   createdAt: string;
 }
 
+export interface CsvLineError {
+  line: number;
+  field?: string;
+  message: string;
+}
+
+export interface CsvImportResult {
+  imported: number;
+  holdings: Holding[];
+}
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
     // Detalle de validación de la API (400), por campo.
     readonly issues: string[] = [],
+    // Detalle por línea para importación CSV (400).
+    readonly errors: CsvLineError[] = [],
   ) {
     super(message);
   }
@@ -194,6 +207,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       response.status,
       body?.message ?? "La API respondió con un error.",
       Array.isArray(body?.issues) ? body.issues : [],
+      Array.isArray(body?.errors) ? body.errors : [],
     );
   }
   return body as T;
@@ -220,4 +234,9 @@ export const api = {
     request<Insight | null>(`/portfolios/${encodeURIComponent(portfolioId)}/insights/latest`),
   generateInsight: (portfolioId: string) =>
     request<Insight>(`/portfolios/${encodeURIComponent(portfolioId)}/insights`, { method: "POST" }),
+  importHoldingsCsv: (portfolioId: string, csv: string) =>
+    request<CsvImportResult>(`/portfolios/${encodeURIComponent(portfolioId)}/holdings/import`, {
+      method: "POST",
+      body: JSON.stringify({ csv }),
+    }),
 };

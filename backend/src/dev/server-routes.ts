@@ -23,4 +23,5 @@ export const ROUTES: Route[] = [
   { method: "DELETE", path: "/holdings/{holdingId}", handler: portfolios },
   { method: "POST", path: "/portfolios/{portfolioId}/insights", handler: insights },
   { method: "GET", path: "/portfolios/{portfolioId}/insights/latest", handler: insights },
+  { method: "POST", path: "/portfolios/{portfolioId}/holdings/import", handler: portfolios },
 ];

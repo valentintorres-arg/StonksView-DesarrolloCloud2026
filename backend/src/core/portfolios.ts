@@ -105,7 +105,7 @@ const toPortfolio = (row: PortfolioRow): Portfolio => ({
   createdAt: row.created_at,
 });
 
-const toHolding = (row: HoldingRow): Holding => ({
+export const toHolding = (row: HoldingRow): Holding => ({
   id: row.id,
   portfolioId: row.portfolio_id,
   symbol: row.symbol,
