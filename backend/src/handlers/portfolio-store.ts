@@ -5,7 +5,9 @@
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import type { PriceRow, PriceStore } from "../core/dashboard";
 import type { PriceWriter } from "../core/prices";
-import type { HoldingRow, PortfolioRow, PortfolioStore, StoreResult } from "../core/portfolios";
+import type { CsvImportStore } from "../core/csv-import";
+import type { HoldingRow, NewHolding, PortfolioRow, PortfolioStore, StoreResult } from "../core/portfolios";
+
 
 const PORTFOLIO_COLUMNS = "id, name, base_currency, created_at";
 
@@ -20,7 +22,7 @@ function result<T>({ data, error, status }: Response<T>, empty: T): StoreResult<
   return { data: (data ?? empty) as T, error: null };
 }
 
-export function supabasePortfolioStore(client: SupabaseClient): PortfolioStore {
+export function supabasePortfolioStore(client: SupabaseClient): PortfolioStore & CsvImportStore {
   return {
     async listPortfolios() {
       const response = await client
@@ -54,6 +56,11 @@ export function supabasePortfolioStore(client: SupabaseClient): PortfolioStore {
     async createHolding(input) {
       const response = await client.from("holdings").insert(input).select(HOLDING_COLUMNS).single();
       return result<HoldingRow>(response as Response<HoldingRow>, null as never);
+    },
+    
+    async createHoldings(inputs: NewHolding[]) {
+      const response = await client.from("holdings").insert(inputs).select(HOLDING_COLUMNS);
+      return result<HoldingRow[]>(response as Response<HoldingRow[]>, []);
     },
 
     async updateHolding(id, patch) {

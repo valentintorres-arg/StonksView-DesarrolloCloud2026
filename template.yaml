@@ -254,6 +254,12 @@ Resources:
             ApiId: !Ref HttpApi
             Path: /holdings/{holdingId}
             Method: DELETE
+            ImportHoldingsCsv:
+        Type: HttpApi
+        Properties:
+          ApiId: !Ref HttpApi
+          Path: /portfolios/{portfolioId}/holdings/import
+          Method: POST
     Metadata:
       BuildMethod: esbuild
       BuildProperties:
